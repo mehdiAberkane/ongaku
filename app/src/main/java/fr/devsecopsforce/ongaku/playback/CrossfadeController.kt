@@ -1,39 +1,53 @@
 package fr.devsecopsforce.ongaku.playback
 
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
-import androidx.media3.common.AudioAttributes
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
-import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * ExoPlayer ne sait pas superposer deux morceaux. Quelques secondes avant la fin, un second lecteur
- * éphémère reprend la fin du morceau en cours pendant que le lecteur principal, celui que voient la
- * notification et l'interface, passe déjà au suivant. Ce contrôleur compte aussi le temps d'écoute.
+ * ExoPlayer ne sait pas superposer deux morceaux : le fondu enchaîné utilise donc deux lecteurs qui
+ * jouent à tour de rôle. Quelques secondes avant la fin, un second lecteur se prépare sur le morceau
+ * suivant. Pendant le fondu, le lecteur actif termine lui-même son morceau en baissant pendant que
+ * le second démarre le suivant en montant : aucun son ne change de lecteur en cours de route. À la
+ * fin, le second devient le lecteur actif, celui de la session que suivent la notification et
+ * l'interface, et l'ancien est libéré.
+ *
+ * Ce contrôleur compte aussi le temps d'écoute.
  */
 class CrossfadeController(
-    private val context: Context,
-    private val player: ExoPlayer,
+    initialPlayer: ExoPlayer,
     private val settings: PlaybackSettings,
     private val playCounts: PlayCounts,
+    /** Crée un lecteur de relève, sans focus audio : le lecteur actif le garde pendant le fondu. */
+    private val createPlayer: () -> ExoPlayer,
+    /** Le lecteur de relève devient le lecteur actif : la session doit le suivre. */
+    private val onPlayerSwapped: (ExoPlayer) -> Unit,
 ) : Player.Listener {
+
+    /** Lecteur actif, celui de la session. */
+    var player: ExoPlayer = initialPlayer
+        private set
 
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
 
-    private var outgoing: ExoPlayer? = null
+    /** Lecteur de relève, préparé sur le morceau suivant. */
+    private var incoming: ExoPlayer? = null
     private var fading = false
     private var fadeStartMs = 0L
     private var fadeDurationMs = 0L
+    private var fadeEndPositionMs = 0L
 
     private var lastTickMs = 0L
     private var pendingListenedMs = 0L
@@ -44,7 +58,8 @@ class CrossfadeController(
         override fun run() {
             trackListening()
             if (fading) updateFade() else watchForTrackEnd()
-            handler.postDelayed(this, TICK_MS)
+            // Pas fins pendant le fondu : le volume glisse au lieu de monter par paliers.
+            handler.postDelayed(this, if (fading) FADE_TICK_MS else TICK_MS)
         }
     }
 
@@ -53,22 +68,35 @@ class CrossfadeController(
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-        if (!playWhenReady) stopOutgoing()
+        if (!playWhenReady) {
+            // Le lecteur actif s'arrête de lui-même à la fin de son morceau pendant le fondu.
+            if (fading && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                finishFade()
+            } else {
+                cancelIncoming()
+            }
+        }
         updateRunning()
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) = updateRunning()
 
     override fun onPlaybackSuppressionReasonChanged(reason: Int) {
-        if (reason != Player.PLAYBACK_SUPPRESSION_REASON_NONE) stopOutgoing()
+        if (reason != Player.PLAYBACK_SUPPRESSION_REASON_NONE) cancelIncoming()
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-        currentTrackListenedMs = 0
-        currentTrackCounted = false
-        // Le lecteur préparé d'avance contient l'ancien morceau : il ne sert plus à rien.
-        if (!fading) stopOutgoing()
+        resetTrackListening()
+        // Morceau suivant ou précédent demandé à la main : la relève ne correspond plus.
+        cancelIncoming()
     }
+
+    // La file a changé : le lecteur de relève ne joue peut-être plus le bon morceau suivant.
+    override fun onTimelineChanged(timeline: Timeline, reason: Int) = cancelIncoming()
+
+    override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = cancelIncoming()
+
+    override fun onRepeatModeChanged(repeatMode: Int) = cancelIncoming()
 
     private fun updateRunning() {
         val shouldRun = player.playWhenReady &&
@@ -94,6 +122,11 @@ class CrossfadeController(
         }
         lastTickMs = now
         if (pendingListenedMs >= SAVE_EVERY_MS) flushListening()
+    }
+
+    private fun resetTrackListening() {
+        currentTrackListenedMs = 0
+        currentTrackCounted = false
     }
 
     /** Une écoute compte une seule fois par lecture : 30 s, ou la moitié d'un morceau plus court. */
@@ -123,70 +156,118 @@ class CrossfadeController(
             player.isPlaying && player.hasNextMediaItem() &&
             player.repeatMode != Player.REPEAT_MODE_ONE
         if (!canFade) {
-            stopOutgoing()
+            cancelIncoming()
             return
         }
 
         val remaining = duration - player.currentPosition
+        val next = incoming
         when {
-            // Retour en arrière alors que le second lecteur était déjà prêt.
-            remaining > fadeMs + PREPARE_LEAD_MS + 1000 -> stopOutgoing()
-            remaining <= fadeMs + PREPARE_LEAD_MS && outgoing == null && remaining > fadeMs / 2 ->
-                prepareOutgoing(duration - fadeMs)
-            remaining <= fadeMs && outgoing?.playbackState == Player.STATE_READY ->
-                startFade(remaining)
+            // Retour en arrière alors que la relève était déjà prête.
+            remaining > fadeMs + PREPARE_LEAD_MS + 1000 -> cancelIncoming()
+            next == null -> if (remaining <= fadeMs + PREPARE_LEAD_MS && remaining > fadeMs / 2) {
+                prepareIncoming()
+            }
+            remaining <= fadeMs && next.playbackState == Player.STATE_READY ->
+                startFade(remaining, duration)
         }
     }
 
-    private fun prepareOutgoing(startPositionMs: Long) {
-        val item = player.currentMediaItem ?: return
-        outgoing = ExoPlayer.Builder(context)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                // Le lecteur principal gère seul le focus audio.
-                /* handleAudioFocus = */ false,
-            )
-            .build()
-            .apply {
-                setMediaItem(item, startPositionMs)
-                playWhenReady = false
-                prepare()
-            }
+    /** Prépare la relève sur le morceau suivant, avec la même file, au volume nul et à l'arrêt. */
+    @OptIn(UnstableApi::class)
+    private fun prepareIncoming() {
+        val nextIndex = player.nextMediaItemIndex
+        if (nextIndex == C.INDEX_UNSET) return
+        val items = List(player.mediaItemCount) { player.getMediaItemAt(it) }
+        val shuffleOrder = currentShuffleOrder()
+        incoming = createPlayer().apply {
+            volume = 0f
+            setMediaItems(items, nextIndex, 0L)
+            repeatMode = player.repeatMode
+            // Même ordre aléatoire que le lecteur actif, pour que « suivant » reste le même.
+            if (shuffleOrder != null) setShuffleOrder(shuffleOrder)
+            shuffleModeEnabled = player.shuffleModeEnabled
+            playWhenReady = false
+            prepare()
+        }
     }
 
-    private fun startFade(remainingMs: Long) {
-        val tail = outgoing ?: return
-        Log.d(TAG, "start, remaining=$remainingMs")
+    /** Ordre de lecture aléatoire du lecteur actif, relu morceau par morceau. */
+    @OptIn(UnstableApi::class)
+    private fun currentShuffleOrder(): ShuffleOrder? {
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return null
+        val order = ArrayList<Int>(timeline.windowCount)
+        var index = timeline.getFirstWindowIndex(/* shuffleModeEnabled = */ true)
+        while (index != C.INDEX_UNSET && order.size < timeline.windowCount) {
+            order += index
+            index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true)
+        }
+        if (order.size != timeline.windowCount) return null
+        return ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), SystemClock.elapsedRealtime())
+    }
+
+    private fun startFade(remainingMs: Long, durationMs: Long) {
+        val next = incoming ?: return
         fading = true
         fadeStartMs = SystemClock.elapsedRealtime()
-        fadeDurationMs = remainingMs
-        tail.seekTo(tail.duration - remainingMs)
-        tail.play()
-        player.volume = 0f
-        player.seekToNextMediaItem()
+        fadeDurationMs = remainingMs.coerceAtLeast(1L)
+        fadeEndPositionMs = durationMs
+        // Le lecteur actif s'arrête à la fin de son morceau au lieu d'enchaîner lui-même le suivant,
+        // que la relève est en train de jouer.
+        player.pauseAtEndOfMediaItems = true
+        next.play()
     }
 
     private fun updateFade() {
-        val progress = (SystemClock.elapsedRealtime() - fadeStartMs).toFloat() / fadeDurationMs
-        if (progress >= 1f) {
-            Log.d(TAG, "end")
-            stopOutgoing()
-            return
+        val next = incoming
+        val remaining = fadeEndPositionMs - player.currentPosition
+        val elapsed = SystemClock.elapsedRealtime() - fadeStartMs
+        when {
+            next == null -> cancelIncoming()
+            // Retour en arrière pendant le fondu.
+            remaining > fadeDurationMs + 1000 -> cancelIncoming()
+            // Fin atteinte, ou garde-fou si le lecteur actif n'avance plus.
+            remaining <= 0 || elapsed > fadeDurationMs + FADE_TIMEOUT_MARGIN_MS -> finishFade()
+            else -> {
+                // La progression suit la position du morceau qui se termine, pas l'horloge.
+                val progress = (1f - remaining.toFloat() / fadeDurationMs).coerceIn(0f, 1f)
+                // Courbes en S : chaque morceau part et arrive en pente douce. Les deux volumes se
+                // croisent à mi-chemin et totalisent toujours 1.
+                val fadeIn = sin(progress * (Math.PI.toFloat() / 2)).let { it * it }
+                next.volume = fadeIn
+                player.volume = 1f - fadeIn
+            }
         }
-        // Courbes à puissance constante : le volume perçu ne se creuse pas au milieu du fondu.
-        val angle = progress * (Math.PI.toFloat() / 2)
-        player.volume = sin(angle)
-        outgoing?.volume = cos(angle)
     }
 
-    private fun stopOutgoing() {
-        outgoing?.release()
-        outgoing = null
+    /** La relève devient le lecteur actif ; l'ancien, arrivé au bout de son morceau, est libéré. */
+    private fun finishFade() {
+        val next = incoming ?: return cancelIncoming()
+        val old = player
+        fading = false
+        incoming = null
+
+        old.removeListener(this)
+        next.volume = 1f
+        player = next
+        next.addListener(this)
+        resetTrackListening()
+        onPlayerSwapped(next)
+        old.release()
+        // L'ancien lecteur a rendu le focus audio en se libérant : la relève le reprend.
+        next.setAudioAttributes(next.audioAttributes, /* handleAudioFocus = */ true)
+        next.setHandleAudioBecomingNoisy(settings.pauseOnNoisy)
+        updateRunning()
+    }
+
+    /** Abandonne la relève : le lecteur actif reprend son volume et enchaînera lui-même. */
+    private fun cancelIncoming() {
+        incoming?.release()
+        incoming = null
         if (fading) {
             fading = false
+            player.pauseAtEndOfMediaItems = false
             player.volume = 1f
         }
     }
@@ -195,13 +276,14 @@ class CrossfadeController(
         handler.removeCallbacks(tick)
         running = false
         flushListening()
-        stopOutgoing()
+        cancelIncoming()
         player.removeListener(this)
     }
 
     private companion object {
-        const val TAG = "OngakuFade"
         const val TICK_MS = 100L
+        const val FADE_TICK_MS = 25L
+        const val FADE_TIMEOUT_MARGIN_MS = 3000L
         const val PREPARE_LEAD_MS = 3000L
         const val SAVE_EVERY_MS = 10_000L
         const val COUNT_PLAY_AFTER_MS = 30_000L

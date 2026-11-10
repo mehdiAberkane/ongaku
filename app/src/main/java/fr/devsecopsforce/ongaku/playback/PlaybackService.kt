@@ -60,17 +60,7 @@ class PlaybackService : MediaSessionService() {
             IntentFilter(Intent.ACTION_SCREEN_OFF),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
-        val player = ExoPlayer.Builder(this)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                /* handleAudioFocus = */ true,
-            )
-            .setHandleAudioBecomingNoisy(settings.pauseOnNoisy)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
+        val player = buildPlayer(isActive = true)
 
         val launchIntent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
         val builder = MediaSession.Builder(this, player)
@@ -86,10 +76,36 @@ class PlaybackService : MediaSessionService() {
             )
         }
         session = builder.build()
-        crossfade = CrossfadeController(this, player, settings, PlayCounts(this))
         stateKeeper = PlaybackStateKeeper(this, player, scope)
+        crossfade = CrossfadeController(
+            player,
+            settings,
+            PlayCounts(this),
+            createPlayer = { buildPlayer(isActive = false) },
+            onPlayerSwapped = { next ->
+                session?.player = next
+                stateKeeper?.switchTo(next)
+            },
+        )
         settings.prefs.registerOnSharedPreferenceChangeListener(settingsListener)
     }
+
+    /**
+     * Le lecteur actif gère le focus audio et le débranchement des écouteurs ; un lecteur de relève
+     * pour le fondu enchaîné ne les prend qu'en devenant actif.
+     */
+    private fun buildPlayer(isActive: Boolean): ExoPlayer =
+        ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ isActive,
+            )
+            .setHandleAudioBecomingNoisy(isActive && settings.pauseOnNoisy)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build()
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 

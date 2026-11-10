@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 /** Retient la file d'attente pour la reprise et tient le widget à jour. */
 class PlaybackStateKeeper(
     private val context: Context,
-    private val player: ExoPlayer,
+    private var player: ExoPlayer,
     private val scope: CoroutineScope,
 ) : Player.Listener {
 
@@ -34,6 +34,16 @@ class PlaybackStateKeeper(
         player.shuffleModeEnabled = prefs.getBoolean(KEY_SHUFFLE, false)
         player.repeatMode = prefs.getInt(KEY_REPEAT, Player.REPEAT_MODE_OFF)
         player.addListener(this)
+    }
+
+    /** Le fondu enchaîné a passé la main à un autre lecteur, qui joue déjà le morceau suivant. */
+    fun switchTo(newPlayer: ExoPlayer) {
+        player.removeListener(this)
+        player = newPlayer
+        newPlayer.addListener(this)
+        onIsPlayingChanged(newPlayer.isPlaying)
+        savePosition()
+        publish(newPlayer.isPlaying || newPlayer.playWhenReady)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
