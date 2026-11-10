@@ -890,31 +890,35 @@ private fun MiniPlayer(
                 .fillMaxWidth()
                 .clickable(onClick = onOpen)
                 .navigationBarsPadding()
-                .padding(8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(metadata?.artworkUri, Modifier.size(44.dp), iconSize = 22.dp)
-            Spacer(Modifier.size(12.dp))
+            Artwork(metadata?.artworkUri, Modifier.size(60.dp), iconSize = 28.dp)
+            Spacer(Modifier.size(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     metadata?.title?.toString().orEmpty(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
                     metadata?.artist?.toString().orEmpty(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            IconButton(onClick = onPlayPause) {
+            IconButton(onClick = onPlayPause, modifier = Modifier.size(52.dp)) {
                 Icon(
                     if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     if (player.isPlaying) "Pause" else "Lecture",
+                    Modifier.size(34.dp),
                 )
             }
-            IconButton(onClick = onNext) { Icon(Icons.Rounded.SkipNext, "Suivant") }
+            IconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Rounded.SkipNext, "Suivant", Modifier.size(30.dp))
+            }
         }
     }
 }
