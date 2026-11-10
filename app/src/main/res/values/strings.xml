@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ongaku</string>
+    <string name="widget_description">Lecteur Ongaku sur l\'écran d\'accueil</string>
+    <string name="widget_line">Ongaku en ligne</string>
+    <string name="widget_rectangle">Ongaku rectangle</string>
+    <string name="widget_square">Ongaku carré</string>
+</resources>
