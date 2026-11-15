@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// Clé de signature gardée hors du dépôt : voir le README. Sans ce fichier, la version de
+// publication est produite non signée et la version de débogage garde la clé de débogage.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "fr.devsecopsforce.ongaku"
@@ -13,6 +23,34 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
+        }
+        getByName("debug") {
+            // Même clé que la publication : on passe de l'une à l'autre sur le téléphone sans
+            // désinstaller, donc sans perdre les listes et les réglages.
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures {

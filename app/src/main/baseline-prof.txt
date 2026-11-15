@@ -1,0 +1,2 @@
+Lfr/devsecopsforce/ongaku/**;
+HSPLfr/devsecopsforce/ongaku/**->**(**)**
