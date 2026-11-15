@@ -119,6 +119,7 @@ import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
+import fr.devsecopsforce.ongaku.data.AppDataStore
 import fr.devsecopsforce.ongaku.data.CoverShape
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.LibrarySortStore
@@ -232,6 +233,7 @@ fun OngakuApp(
     // Tous les morceaux du téléphone : un morceau masqué par le filtre n'est pas introuvable.
     val existingIds = remember(library.allTracks) { library.allTracks.mapTo(HashSet()) { it.id } }
     val identityReport by LibraryIdentity.pendingReport.collectAsStateWithLifecycle()
+    val dataNotice by AppDataStore.pendingNotice.collectAsStateWithLifecycle()
     val playCounts = remember { PlayCounts(context) }
     var counts by remember { mutableStateOf(playCounts.all()) }
     DisposableEffect(playCounts) {
@@ -524,6 +526,31 @@ fun OngakuApp(
                 renamingPlaylist = null
             },
             onDismiss = { renamingPlaylist = null },
+        )
+    }
+
+    dataNotice?.let { notice ->
+        AlertDialog(
+            onDismissRequest = AppDataStore::noticeShown,
+            title = { Text("Fichier des listes abîmé") },
+            text = {
+                Text(
+                    buildString {
+                        append("Le fichier qui contient tes listes, tes favoris et tes images de fond était illisible. ")
+                        append(
+                            if (notice.restoredFromCopy) {
+                                "Ongaku a repris sa dernière copie : tes dernières modifications peuvent manquer. "
+                            } else {
+                                "Aucune copie lisible n'existait : Ongaku repart de zéro. Tu peux réimporter une sauvegarde depuis les réglages. "
+                            },
+                        )
+                        if (notice.setAsideName != null) {
+                            append("Le fichier abîmé est gardé de côté (${notice.setAsideName}).")
+                        }
+                    },
+                )
+            },
+            confirmButton = { TextButton(onClick = AppDataStore::noticeShown) { Text("OK") } },
         )
     }
 
