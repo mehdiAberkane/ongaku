@@ -69,6 +69,17 @@ listes ni ses réglages. Sans ce fichier, la version de publication est produite
 Gardez une copie de la clé et de son mot de passe en lieu sûr : sans elle, une mise à jour
 oblige à désinstaller l'application, ce qui efface les listes, les favoris et les réglages.
 
+## Tests
+
+```bash
+./gradlew lintDebug testDebugUnitTest
+```
+
+Les tests unitaires (`app/src/test`) couvrent la sauvegarde des listes, le stockage des données, le
+filtre de la bibliothèque, le regroupement en albums et en artistes, et les décisions du fondu
+enchaîné et du compteur d'écoutes. Ils tournent sur l'ordinateur, sans téléphone. La même
+vérification, avec la compilation des deux versions, tourne sur GitHub Actions à chaque pull request.
+
 ## Permissions
 
 | Permission | Usage |

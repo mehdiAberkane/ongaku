@@ -1,3 +1,6 @@
+// Media3 marque certaines API comme instables (susceptibles de changer d'une version à l'autre).
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package fr.devsecopsforce.ongaku.playback
 
 import android.bluetooth.BluetoothA2dp
