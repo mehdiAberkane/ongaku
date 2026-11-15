@@ -1,3 +1,6 @@
+// Media3 marque certaines API comme instables (susceptibles de changer d'une version à l'autre).
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package fr.devsecopsforce.ongaku.playback
 
 import android.os.Handler
@@ -13,7 +16,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
-import kotlin.math.sin
 
 /**
  * ExoPlayer ne sait pas superposer deux morceaux : le fondu enchaîné utilise donc deux lecteurs qui
@@ -129,16 +131,10 @@ class CrossfadeController(
         currentTrackCounted = false
     }
 
-    /** Une écoute compte une seule fois par lecture : 30 s, ou la moitié d'un morceau plus court. */
+    /** Une écoute compte une seule fois par lecture : voir [CrossfadeRules.shouldCountPlay]. */
     private fun countPlayIfDue() {
         if (currentTrackCounted) return
-        val duration = player.duration
-        val threshold = if (duration == C.TIME_UNSET) {
-            COUNT_PLAY_AFTER_MS
-        } else {
-            minOf(COUNT_PLAY_AFTER_MS, duration / 2)
-        }
-        if (currentTrackListenedMs < threshold) return
+        if (!CrossfadeRules.shouldCountPlay(currentTrackListenedMs, player.knownDuration())) return
         currentTrackCounted = true
         player.currentMediaItem?.mediaId?.toLongOrNull()?.let(playCounts::increment)
     }
@@ -149,27 +145,30 @@ class CrossfadeController(
         pendingListenedMs = 0
     }
 
-    private fun watchForTrackEnd() {
-        val fadeMs = settings.crossfadeSeconds * 1000L
-        val duration = player.duration
-        val canFade = fadeMs > 0 && duration != C.TIME_UNSET && duration >= fadeMs * 2 &&
-            player.isPlaying && player.hasNextMediaItem() &&
-            player.repeatMode != Player.REPEAT_MODE_ONE
-        if (!canFade) {
-            cancelIncoming()
-            return
-        }
+    private fun Player.knownDuration(): Long? = duration.takeUnless { it == C.TIME_UNSET }
 
-        val remaining = duration - player.currentPosition
+    private fun watchForTrackEnd() {
         val next = incoming
-        when {
-            // Retour en arrière alors que la relève était déjà prête.
-            remaining > fadeMs + PREPARE_LEAD_MS + 1000 -> cancelIncoming()
-            next == null -> if (remaining <= fadeMs + PREPARE_LEAD_MS && remaining > fadeMs / 2) {
-                prepareIncoming()
-            }
-            remaining <= fadeMs && next.playbackState == Player.STATE_READY ->
-                startFade(remaining, duration)
+        val duration = player.knownDuration()
+        val action = CrossfadeRules.watch(
+            fadeMs = settings.crossfadeSeconds * 1000L,
+            durationMs = duration,
+            positionMs = player.currentPosition,
+            isPlaying = player.isPlaying,
+            hasNext = player.hasNextMediaItem(),
+            repeatOne = player.repeatMode == Player.REPEAT_MODE_ONE,
+            incoming = when {
+                next == null -> CrossfadeRules.Incoming.NONE
+                next.playbackState == Player.STATE_READY -> CrossfadeRules.Incoming.READY
+                else -> CrossfadeRules.Incoming.PREPARING
+            },
+        )
+        when (action) {
+            CrossfadeRules.Watch.NOTHING -> Unit
+            CrossfadeRules.Watch.CANCEL -> cancelIncoming()
+            CrossfadeRules.Watch.PREPARE -> prepareIncoming()
+            CrossfadeRules.Watch.START ->
+                if (duration != null) startFade(duration - player.currentPosition, duration)
         }
     }
 
@@ -220,23 +219,18 @@ class CrossfadeController(
     }
 
     private fun updateFade() {
-        val next = incoming
-        val remaining = fadeEndPositionMs - player.currentPosition
-        val elapsed = SystemClock.elapsedRealtime() - fadeStartMs
-        when {
-            next == null -> cancelIncoming()
-            // Retour en arrière pendant le fondu.
-            remaining > fadeDurationMs + 1000 -> cancelIncoming()
-            // Fin atteinte, ou garde-fou si le lecteur actif n'avance plus.
-            remaining <= 0 || elapsed > fadeDurationMs + FADE_TIMEOUT_MARGIN_MS -> finishFade()
-            else -> {
-                // La progression suit la position du morceau qui se termine, pas l'horloge.
-                val progress = (1f - remaining.toFloat() / fadeDurationMs).coerceIn(0f, 1f)
-                // Courbes en S : chaque morceau part et arrive en pente douce. Les deux volumes se
-                // croisent à mi-chemin et totalisent toujours 1.
-                val fadeIn = sin(progress * (Math.PI.toFloat() / 2)).let { it * it }
-                next.volume = fadeIn
-                player.volume = 1f - fadeIn
+        val next = incoming ?: return cancelIncoming()
+        val step = CrossfadeRules.fade(
+            remainingMs = fadeEndPositionMs - player.currentPosition,
+            fadeDurationMs = fadeDurationMs,
+            elapsedMs = SystemClock.elapsedRealtime() - fadeStartMs,
+        )
+        when (step) {
+            CrossfadeRules.Fade.Cancel -> cancelIncoming()
+            CrossfadeRules.Fade.Finish -> finishFade()
+            is CrossfadeRules.Fade.Volumes -> {
+                next.volume = step.incoming
+                player.volume = step.outgoing
             }
         }
     }
@@ -283,9 +277,6 @@ class CrossfadeController(
     private companion object {
         const val TICK_MS = 100L
         const val FADE_TICK_MS = 25L
-        const val FADE_TIMEOUT_MARGIN_MS = 3000L
-        const val PREPARE_LEAD_MS = 3000L
         const val SAVE_EVERY_MS = 10_000L
-        const val COUNT_PLAY_AFTER_MS = 30_000L
     }
 }

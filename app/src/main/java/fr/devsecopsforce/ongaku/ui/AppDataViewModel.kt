@@ -139,7 +139,9 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                 toast("Lecture du fichier impossible.")
                 return@launch
             }
-            applyChange { data -> merge(data, imported) }
+            applyChange { data ->
+                PlaylistBackup.merge(data, imported) { UUID.randomUUID().toString() }
+            }
             val missing = if (imported.missingTracks > 0) {
                 ", ${imported.missingTracks} morceau(x) introuvable(s)"
             } else {
@@ -147,21 +149,6 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
             }
             toast("Import terminé : ${imported.playlists.size} liste(s)$missing.")
         }
-    }
-
-    private fun merge(data: AppData, imported: PlaylistBackup.Imported): AppData {
-        val playlists = data.playlists.toMutableList()
-        imported.playlists.forEach { (name, ids) ->
-            val index = playlists.indexOfFirst { it.name.trim().equals(name.trim(), ignoreCase = true) }
-            if (index >= 0) {
-                playlists[index] = playlists[index].let {
-                    it.copy(trackIds = (it.trackIds + ids).distinct())
-                }
-            } else {
-                playlists += Playlist(UUID.randomUUID().toString(), name.trim(), ids)
-            }
-        }
-        return data.copy(favorites = data.favorites + imported.favorites, playlists = playlists)
     }
 
     /** Le sélecteur ne donne qu'un accès temporaire à l'image : on en garde une copie privée. */

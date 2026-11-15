@@ -39,6 +39,18 @@ Déplacer une carte : modifier `columnId`, `order` et `updatedAt` dans son fichi
 - Les deux versions sont signées avec la clé de `keystore.properties` (hors dépôt) : passer de l'une à l'autre ne demande pas de désinstaller. **Ne jamais désinstaller l'application du téléphone** : cela efface les listes, les favoris, les réglages et les widgets.
 - Un plantage qui n'arrive qu'en publication vient en général de R8 : ajouter la règle dans `app/proguard-rules.pro`.
 
+## Tests et intégration continue
+
+```bash
+./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease   # ce que lance la CI
+```
+
+- Tests unitaires dans `app/src/test` (JUnit 4, Robolectric pour `Uri`, `org.json` et `Context`). Toute logique pure modifiée ou ajoutée vient avec ses tests dans la même pull request.
+- Le fondu enchaîné et le compteur d'écoutes décident dans `CrossfadeRules` (sans lecteur, donc testable) ; `CrossfadeController` ne fait qu'appliquer. Garder cette séparation.
+- Les API Media3 « instables » s'utilisent avec `@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)`, sinon le lint échoue.
+- CI : `.github/workflows/ci.yml` (GitHub Actions) sur chaque pull request et sur `main`. Ne fusionner une pull request que si la CI est verte. Les actions sont épinglées par empreinte de commit, sur des versions publiées depuis au moins deux semaines.
+- Avant de pousser, lancer la même commande en local.
+
 ## Tester sur le téléphone
 
 - Tester sur le vrai téléphone de l'utilisateur, branché en USB (`adb`), et vérifier le résultat (état de la session média, capture d'écran) plutôt que de le supposer.

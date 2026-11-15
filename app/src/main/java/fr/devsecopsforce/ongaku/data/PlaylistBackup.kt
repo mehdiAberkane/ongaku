@@ -70,5 +70,24 @@ object PlaylistBackup {
         return Imported(favorites, playlists, missing)
     }
 
+    /**
+     * Ajoute la sauvegarde à l'existant sans rien effacer : une liste du même nom (sans tenir compte
+     * de la casse ni des espaces autour) reçoit les morceaux qui lui manquent, les autres sont créées.
+     */
+    fun merge(data: AppData, imported: Imported, newId: () -> String): AppData {
+        val playlists = data.playlists.toMutableList()
+        imported.playlists.forEach { (name, ids) ->
+            val index = playlists.indexOfFirst { it.name.trim().equals(name.trim(), ignoreCase = true) }
+            if (index >= 0) {
+                playlists[index] = playlists[index].let {
+                    it.copy(trackIds = (it.trackIds + ids).distinct())
+                }
+            } else {
+                playlists += Playlist(newId(), name.trim(), ids)
+            }
+        }
+        return data.copy(favorites = data.favorites + imported.favorites, playlists = playlists)
+    }
+
     private fun String.norm() = trim().lowercase()
 }

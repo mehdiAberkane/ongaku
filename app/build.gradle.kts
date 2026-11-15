@@ -77,4 +77,8 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.coil.compose)
+
+    testImplementation(libs.junit)
+    // Classes Android (Uri, org.json, Context) dans les tests qui tournent sur l'ordinateur.
+    testImplementation(libs.robolectric)
 }
