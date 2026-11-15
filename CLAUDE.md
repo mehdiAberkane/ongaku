@@ -23,6 +23,7 @@ Déplacer une carte : modifier `columnId`, `order` et `updatedAt` dans son fichi
 - **Lecture seule sur la musique** : Ongaku ne modifie, ne déplace et ne supprime jamais un fichier audio. Playlists, favoris et réglages restent dans le stockage privé de l'application.
 - **Identifiants de morceaux** : Android peut les redistribuer. Tout nouvel endroit qui enregistre un identifiant de morceau doit être recalé par `LibraryIdentity` (ajouter ses identifiants à `referenced` et leur appliquer `remap`), avec un test dans `LibraryIdentityTest`. Un identifiant négatif désigne un morceau introuvable gardé de côté.
 - **Écriture de fichiers** : passer par `SafeFile.write` (tout-ou-rien), pas par `AtomicFile`.
+- **Format de `ongaku.json`** : un nouveau champ est facultatif à la lecture (valeur par défaut s'il manque). Un changement de structure augmente `AppDataStore.VERSION` et ajoute son étape dans `migrate`, avec un test qui relit un fichier de l'ancienne version.
 - **Pas d'accès à Internet** : ne pas ajouter la permission `INTERNET`. La sauvegarde vers Google Drive passe par le sélecteur de fichiers d'Android.
 - **Options d'apparence désactivables** : toute nouvelle option d'apparence peut être coupée dans les réglages.
 - **Permissions facultatives** : une fonction qui demande une permission en plus (Bluetooth, superposition) doit rester utilisable sans elle et l'expliquer à l'utilisateur.
