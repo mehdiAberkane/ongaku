@@ -36,6 +36,24 @@ class AppDataStoreTest {
     }
 
     @Test
+    fun `un second enregistrement remplace bien le premier`() {
+        AppDataStore(context).save(AppData(favorites = setOf(1)))
+        AppDataStore(context).save(AppData(favorites = setOf(2)))
+
+        assertEquals(setOf(2L), AppDataStore(context).load().favorites)
+        assertFalse(File(context.filesDir, "ongaku.json.tmp").exists())
+    }
+
+    @Test
+    fun `une copie laissée par l'ancienne écriture est récupérée`() {
+        File(context.filesDir, "ongaku.json.bak").writeText(
+            """{"favorites":[4],"playlists":[],"appBackground":null,"playerBackground":null,"trackBackgrounds":{}}""",
+        )
+
+        assertEquals(setOf(4L), AppDataStore(context).load().favorites)
+    }
+
+    @Test
     fun `un fichier abîmé est mis de côté au lieu d'être écrasé`() {
         file.writeText("{ pas du json")
 

@@ -1,7 +1,6 @@
 package fr.devsecopsforce.ongaku.data
 
 import android.content.Context
-import androidx.core.util.AtomicFile
 import java.io.File
 import java.io.IOException
 import org.json.JSONArray
@@ -23,29 +22,25 @@ data class AppData(
 )
 
 class AppDataStore(context: Context) {
-    private val file = AtomicFile(File(context.filesDir, FILE_NAME))
+    private val file = File(context.filesDir, FILE_NAME)
 
     fun load(): AppData {
-        if (!file.baseFile.exists()) return AppData()
+        // Copie laissée par une ancienne version d'AtomicFile interrompue en pleine écriture.
+        val legacyBackup = File(file.parentFile, "$FILE_NAME.bak")
+        if (!file.exists() && legacyBackup.exists()) legacyBackup.renameTo(file)
+        if (!file.exists()) return AppData()
         return try {
-            parse(String(file.readFully(), Charsets.UTF_8))
+            parse(file.readText(Charsets.UTF_8))
         } catch (e: Exception) {
             // On garde le fichier illisible de côté plutôt que de l'écraser à la prochaine sauvegarde.
-            file.baseFile.renameTo(File(file.baseFile.parentFile, "$FILE_NAME.corrupt"))
+            file.renameTo(File(file.parentFile, "$FILE_NAME.corrupt"))
             AppData()
         }
     }
 
     @Throws(IOException::class)
     fun save(data: AppData) {
-        val output = file.startWrite()
-        try {
-            output.write(serialize(data).toByteArray(Charsets.UTF_8))
-            file.finishWrite(output)
-        } catch (e: IOException) {
-            file.failWrite(output)
-            throw e
-        }
+        SafeFile.write(file, serialize(data).toByteArray(Charsets.UTF_8))
     }
 
     private fun serialize(data: AppData): String = JSONObject()
@@ -98,7 +93,13 @@ class AppDataStore(context: Context) {
     private fun JSONObject.stringOrNull(key: String): String? =
         if (isNull(key)) null else getString(key)
 
-    private companion object {
-        const val FILE_NAME = "ongaku.json"
+    companion object {
+        private const val FILE_NAME = "ongaku.json"
+
+        /**
+         * Verrou de toute lecture-modification-écriture de ongaku.json : l'interface et la
+         * vérification des identifiants ([LibraryIdentity]) peuvent y écrire en même temps.
+         */
+        val lock = Any()
     }
 }
