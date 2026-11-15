@@ -26,6 +26,8 @@ data class Track(
     val extension: String,
     val uri: Uri,
     val artworkUri: Uri,
+    /** Chemin du fichier depuis la racine du stockage : reconnaît le morceau si Android change son identifiant. */
+    val relativePath: String = "",
 )
 
 /** Un album ou un artiste : un titre affiché et les morceaux qu'il regroupe. */
@@ -153,9 +155,12 @@ class MusicRepository(private val context: Context) {
                         id,
                     ),
                     artworkUri = ContentUris.withAppendedId(ALBUM_ART_URI, albumId),
+                    relativePath = path.removePrefix(INTERNAL_STORAGE_PREFIX),
                 )
             }
         }
+        // Android a pu renuméroter ses morceaux : listes, favoris et compteurs sont recalés ici.
+        LibraryIdentity.check(context, tracks)
         tracks
     }
 

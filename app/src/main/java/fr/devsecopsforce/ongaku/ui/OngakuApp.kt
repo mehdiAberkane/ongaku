@@ -120,6 +120,7 @@ import coil3.compose.AsyncImage
 import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.CoverShape
+import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
@@ -228,6 +229,9 @@ fun OngakuApp(
     }
 
     val tracksById = remember(library.tracks) { library.tracks.associateBy { it.id } }
+    // Tous les morceaux du téléphone : un morceau masqué par le filtre n'est pas introuvable.
+    val existingIds = remember(library.allTracks) { library.allTracks.mapTo(HashSet()) { it.id } }
+    val identityReport by LibraryIdentity.pendingReport.collectAsStateWithLifecycle()
     val playCounts = remember { PlayCounts(context) }
     var counts by remember { mutableStateOf(playCounts.all()) }
     DisposableEffect(playCounts) {
@@ -364,13 +368,18 @@ fun OngakuApp(
                         onPlay = playerViewModel::play,
                         onOpenGroup = { detail = Detail.Group(it, from = Detail.Search) },
                     )
-                    currentDetail == Detail.Favorites -> TrackList(
-                        tracks = library.tracks.filter { it.id in data.favorites },
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                        emptyMessage = "Touche le cœur d'un morceau pour l'ajouter ici.",
-                    )
+                    currentDetail == Detail.Favorites -> WithMissingBanner(
+                        missing = data.favorites.count { it !in existingIds },
+                        onRemove = { appDataViewModel.removeMissingFavorites(existingIds) },
+                    ) {
+                        TrackList(
+                            tracks = library.tracks.filter { it.id in data.favorites },
+                            currentId = currentId,
+                            actions = actions,
+                            onPlay = playerViewModel::play,
+                            emptyMessage = "Touche le cœur d'un morceau pour l'ajouter ici.",
+                        )
+                    }
                     currentDetail == Detail.RecentlyAdded -> TrackList(
                         tracks = remember(library.tracks) {
                             library.tracks.sortedByDescending { it.dateAddedSeconds }
@@ -395,17 +404,24 @@ fun OngakuApp(
                             "$plays écoute${if (plays > 1) "s" else ""}"
                         },
                     )
-                    currentDetail is Detail.PlaylistDetail -> TrackList(
-                        tracks = currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get),
-                        currentId = currentId,
-                        actions = actions.copy(
-                            removeFromPlaylist = { trackId ->
-                                appDataViewModel.removeFromPlaylist(currentDetail.id, trackId)
-                            },
-                        ),
-                        onPlay = playerViewModel::play,
-                        emptyMessage = "Cette liste est vide. Ajoute des morceaux depuis leur menu.",
-                    )
+                    currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
+                        missing = currentPlaylist?.trackIds.orEmpty().count { it !in existingIds },
+                        onRemove = {
+                            appDataViewModel.removeMissingFromPlaylist(currentDetail.id, existingIds)
+                        },
+                    ) {
+                        TrackList(
+                            tracks = currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get),
+                            currentId = currentId,
+                            actions = actions.copy(
+                                removeFromPlaylist = { trackId ->
+                                    appDataViewModel.removeFromPlaylist(currentDetail.id, trackId)
+                                },
+                            ),
+                            onPlay = playerViewModel::play,
+                            emptyMessage = "Cette liste est vide. Ajoute des morceaux depuis leur menu.",
+                        )
+                    }
                     currentDetail == Detail.Settings -> SettingsScreen(
                         settings = settings,
                         allTracks = library.allTracks,
@@ -448,6 +464,7 @@ fun OngakuApp(
                         onOpenTop = { detail = Detail.Top50 },
                         onOpenPlaylist = { detail = Detail.PlaylistDetail(it.id) },
                         onCreatePlaylist = { creatingPlaylist = true },
+                        existingIds = existingIds,
                     )
                 }
             }
@@ -507,6 +524,34 @@ fun OngakuApp(
                 renamingPlaylist = null
             },
             onDismiss = { renamingPlaylist = null },
+        )
+    }
+
+    identityReport?.let { report ->
+        AlertDialog(
+            onDismissRequest = LibraryIdentity::reportShown,
+            title = { Text("Bibliothèque renumérotée") },
+            text = {
+                Text(
+                    buildString {
+                        append("Android a changé les identifiants de ta musique. ")
+                        if (report.recovered > 0) {
+                            append("${report.recovered} morceau${if (report.recovered > 1) "x" else ""} de tes listes, favoris ou écoutes ")
+                            append(if (report.recovered > 1) "ont été retrouvés. " else "a été retrouvé. ")
+                        }
+                        if (report.missing > 0) {
+                            append(
+                                if (report.missing > 1) {
+                                    "${report.missing} sont introuvables : ils restent dans tes listes et reviendront si leur fichier réapparaît."
+                                } else {
+                                    "1 est introuvable : il reste dans tes listes et reviendra si son fichier réapparaît."
+                                },
+                            )
+                        }
+                    },
+                )
+            },
+            confirmButton = { TextButton(onClick = LibraryIdentity::reportShown) { Text("OK") } },
         )
     }
 
@@ -627,6 +672,7 @@ private fun LibraryTabs(
     onOpenTop: () -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
+    existingIds: Set<Long>,
 ) {
     val titles = listOf("Titres", "Albums", "Artistes", "Listes")
     // Index par lettre seulement quand la liste est rangée par ordre alphabétique.
@@ -694,6 +740,7 @@ private fun LibraryTabs(
             2 -> GroupList(artists, onOpenGroup, letters = artistLetters)
             else -> PlaylistsTab(
                 actions.data,
+                existingIds,
                 onOpenFavorites,
                 onOpenRecent,
                 onOpenTop,
@@ -812,6 +859,44 @@ private const val SMART_PLAYLIST_SIZE = 50
 
 private fun countLabel(count: Int) = "$count titre${if (count > 1) "s" else ""}"
 
+/** « 12 titres », ou « 12 titres · 2 introuvables » quand des fichiers ont disparu. */
+private fun countLabel(ids: Collection<Long>, existingIds: Set<Long>): String {
+    val missing = ids.count { it !in existingIds }
+    val label = countLabel(ids.size - missing)
+    return if (missing == 0) label else "$label · $missing introuvable${if (missing > 1) "s" else ""}"
+}
+
+/** Au-dessus d'une liste : les morceaux dont le fichier a disparu, et de quoi les retirer. */
+@Composable
+private fun WithMissingBanner(missing: Int, onRemove: () -> Unit, content: @Composable () -> Unit) {
+    if (missing == 0) {
+        content()
+        return
+    }
+    Column(Modifier.fillMaxSize()) {
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (missing > 1) {
+                        "$missing morceaux introuvables : leur fichier n'est plus sur le téléphone."
+                    } else {
+                        "1 morceau introuvable : son fichier n'est plus sur le téléphone."
+                    },
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                TextButton(onClick = onRemove) { Text("Retirer") }
+            }
+        }
+        Box(Modifier.weight(1f)) { content() }
+    }
+}
+
 @Composable
 private fun SectionHeader(text: String) {
     Text(
@@ -825,6 +910,7 @@ private fun SectionHeader(text: String) {
 @Composable
 private fun PlaylistsTab(
     data: AppData,
+    existingIds: Set<Long>,
     onOpenFavorites: () -> Unit,
     onOpenRecent: () -> Unit,
     onOpenTop: () -> Unit,
@@ -836,7 +922,7 @@ private fun PlaylistsTab(
         item {
             ListRow(
                 title = "Favoris",
-                subtitle = countLabel(data.favorites.size),
+                subtitle = countLabel(data.favorites, existingIds),
                 artworkUri = null,
                 icon = Icons.Rounded.Favorite,
                 onClick = onOpenFavorites,
@@ -873,7 +959,7 @@ private fun PlaylistsTab(
         items(data.playlists, key = { it.id }) { playlist ->
             ListRow(
                 title = playlist.name,
-                subtitle = countLabel(playlist.trackIds.size),
+                subtitle = countLabel(playlist.trackIds, existingIds),
                 artworkUri = null,
                 icon = Icons.AutoMirrored.Rounded.QueueMusic,
                 onClick = { onOpenPlaylist(playlist) },

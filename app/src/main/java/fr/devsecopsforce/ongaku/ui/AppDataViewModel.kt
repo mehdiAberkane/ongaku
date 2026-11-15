@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
+import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistBackup
 import fr.devsecopsforce.ongaku.data.Track
@@ -37,7 +38,31 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
     private val _state = MutableStateFlow(AppData())
     val state: StateFlow<AppData> = _state.asStateFlow()
 
-    private val loading = viewModelScope.launch(Dispatchers.IO) { _state.value = store.load() }
+    /** Correction des identifiants ([LibraryIdentity]) déjà prise en compte dans [_state]. */
+    private var loadedGeneration = -1
+
+    /** À appeler sous [AppDataStore.lock]. */
+    private fun reloadIfCorrected() {
+        val generation = LibraryIdentity.generation.value
+        if (generation != loadedGeneration) {
+            _state.value = store.load()
+            loadedGeneration = generation
+        }
+    }
+
+    private val loading = viewModelScope.launch(Dispatchers.IO) {
+        synchronized(AppDataStore.lock) { reloadIfCorrected() }
+    }
+
+    init {
+        // Le fichier a été corrigé pendant que l'écran était ouvert : on le relit.
+        viewModelScope.launch(Dispatchers.IO) {
+            LibraryIdentity.generation.collect {
+                loading.join()
+                mutex.withLock { synchronized(AppDataStore.lock) { reloadIfCorrected() } }
+            }
+        }
+    }
 
     fun backgroundFile(name: String?): File? = name?.let { File(backgroundsDir, it) }
 
@@ -48,14 +73,30 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun applyChange(transform: (AppData) -> AppData) {
         loading.join()
         mutex.withLock {
-            val updated = transform(_state.value)
-            _state.value = updated
-            try {
-                store.save(updated)
-            } catch (e: IOException) {
-                toast("Enregistrement impossible.")
+            val saved = synchronized(AppDataStore.lock) {
+                // Jamais d'écriture à partir d'identifiants périmés.
+                reloadIfCorrected()
+                val updated = transform(_state.value)
+                _state.value = updated
+                try {
+                    store.save(updated)
+                    true
+                } catch (e: IOException) {
+                    false
+                }
             }
+            if (!saved) toast("Enregistrement impossible.")
         }
+    }
+
+    /** Retire des favoris les morceaux qui ne sont plus sur le téléphone. */
+    fun removeMissingFavorites(existing: Set<Long>) = mutate { data ->
+        data.copy(favorites = data.favorites.filterTo(HashSet()) { it in existing })
+    }
+
+    /** Retire d'une liste les morceaux qui ne sont plus sur le téléphone. */
+    fun removeMissingFromPlaylist(id: String, existing: Set<Long>) = updatePlaylist(id) { playlist ->
+        playlist.copy(trackIds = playlist.trackIds.filter { it in existing })
     }
 
     private suspend fun toast(message: String) = withContext(Dispatchers.Main) {

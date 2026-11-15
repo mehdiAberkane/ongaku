@@ -15,6 +15,8 @@ internal fun track(
     dateAddedSeconds: Long = 0,
     folder: String = "Music",
     extension: String = "mp3",
+    relativePath: String = "$folder/$title.$extension",
+    sizeBytes: Long = 1_000L + id,
 ) = Track(
     id = id,
     title = title,
@@ -24,10 +26,14 @@ internal fun track(
     trackNumber = trackNumber,
     year = year,
     durationMs = durationMs,
-    sizeBytes = 0,
+    sizeBytes = sizeBytes,
     dateAddedSeconds = dateAddedSeconds,
     folder = folder,
     extension = extension,
     uri = Uri.EMPTY,
     artworkUri = Uri.EMPTY,
+    relativePath = relativePath,
 )
+
+/** Le même fichier, auquel Android a donné un autre identifiant. */
+internal fun Track.renumbered(newId: Long) = copy(id = newId)

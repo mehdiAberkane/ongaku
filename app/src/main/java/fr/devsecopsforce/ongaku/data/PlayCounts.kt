@@ -18,4 +18,19 @@ class PlayCounts(context: Context) {
         val id = key.toLongOrNull()
         if (id != null && value is Int) id to value else null
     }.toMap()
+
+    /** Reporte les écoutes sur les nouveaux identifiants ; deux anciens vers un même morceau s'additionnent. */
+    fun remap(remap: Map<Long, Long>) {
+        val before = all()
+        if (before.keys.none { it in remap }) return
+        val after = HashMap<Long, Int>()
+        before.forEach { (id, count) ->
+            val target = remap[id] ?: id
+            after[target] = (after[target] ?: 0) + count
+        }
+        prefs.edit(commit = true) {
+            clear()
+            after.forEach { (id, count) -> putInt(id.toString(), count) }
+        }
+    }
 }
