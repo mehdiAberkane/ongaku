@@ -17,6 +17,8 @@ data class Track(
     val album: String,
     val albumId: Long,
     val trackNumber: Int,
+    /** 0 si l'année n'est pas renseignée. */
+    val year: Int = 0,
     val durationMs: Long,
     val sizeBytes: Long,
     val dateAddedSeconds: Long,
@@ -33,6 +35,8 @@ data class TrackGroup(
     val subtitle: String,
     val artworkUri: Uri?,
     val tracks: List<Track>,
+    /** Année la plus récente des morceaux d'un album ; null si aucune n'est renseignée. */
+    val year: Int? = null,
 )
 
 fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
@@ -67,9 +71,10 @@ fun List<Track>.albums(): List<TrackGroup> = groupBy { it.albumId }
             subtitle = parts.first().mainArtist(),
             artworkUri = sorted.first().artworkUri,
             tracks = sorted,
+            year = sorted.maxOf { it.year }.takeIf { it > 0 },
         )
     }
-    .sortedBy { it.title.lowercase() }
+    .sortedBy { it.title.searchKey() }
 
 fun List<Track>.artists(): List<TrackGroup> = groupBy { it.artist }
     .map { (artist, tracks) ->
@@ -84,7 +89,7 @@ fun List<Track>.artists(): List<TrackGroup> = groupBy { it.artist }
             tracks = sorted,
         )
     }
-    .sortedBy { it.title.lowercase() }
+    .sortedBy { it.title.searchKey() }
 
 class MusicRepository(private val context: Context) {
 
@@ -96,6 +101,7 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.DATE_ADDED,
@@ -116,6 +122,7 @@ class MusicRepository(private val context: Context) {
             val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
             val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
@@ -135,6 +142,7 @@ class MusicRepository(private val context: Context) {
                     albumId = albumId,
                     // MediaStore encode le numéro de disque dans les milliers.
                     trackNumber = cursor.getInt(trackColumn),
+                    year = cursor.getInt(yearColumn),
                     durationMs = cursor.getLong(durationColumn),
                     sizeBytes = cursor.getLong(sizeColumn),
                     dateAddedSeconds = cursor.getLong(dateAddedColumn),

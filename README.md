@@ -8,6 +8,10 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
 ## Fonctionnalités
 
 - **Bibliothèque** : morceaux, albums, artistes, ajouts récents, favoris et playlists.
+- **Recherche et tri** : recherche dans les titres, albums et artistes, sans tenir compte des
+  accents ni des majuscules ; tri des titres (titre, artiste, album, date d'ajout, durée, écoutes)
+  et des albums (nom, artiste, année), retenu d'un lancement à l'autre ; index par lettre pour
+  parcourir vite les longues listes.
 - **Lecture** : file d'attente, lecture aléatoire, répétition, fondu enchaîné réglable, pause quand
   les écouteurs sont débranchés, reprise de la dernière file au redémarrage.
 - **Lecture automatique en Bluetooth** : la musique reprend quand un appareil choisi se connecte.
