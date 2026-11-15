@@ -28,13 +28,18 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
@@ -51,6 +56,7 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -91,6 +97,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -98,7 +106,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -107,15 +117,22 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
+import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.CoverShape
+import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackGroup
+import fr.devsecopsforce.ongaku.data.TrackSort
 import fr.devsecopsforce.ongaku.data.albums
 import fr.devsecopsforce.ongaku.data.artists
+import fr.devsecopsforce.ongaku.data.letterPositions
+import fr.devsecopsforce.ongaku.data.search
+import fr.devsecopsforce.ongaku.data.sortText
+import fr.devsecopsforce.ongaku.data.sorted
 import java.io.File
 
 private val audioPermission: String
@@ -126,7 +143,9 @@ private val audioPermission: String
     }
 
 private sealed interface Detail {
-    data class Group(val group: TrackGroup) : Detail
+    /** [from] : écran où revenir, par exemple la recherche qui a ouvert cet album. */
+    data class Group(val group: TrackGroup, val from: Detail? = null) : Detail
+    data object Search : Detail
     data object Favorites : Detail
     data object RecentlyAdded : Detail
     data object Top50 : Detail
@@ -218,6 +237,19 @@ fun OngakuApp(
         playCounts.prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { playCounts.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+    val sortStore = remember { LibrarySortStore(context) }
+    var trackSort by remember { mutableStateOf(sortStore.trackSort) }
+    var albumSort by remember { mutableStateOf(sortStore.albumSort) }
+    // Les écoutes changent souvent : elles ne relancent le tri que s'il porte sur elles.
+    val sortedTracks = remember(library.tracks, trackSort, counts.takeIf { trackSort == TrackSort.PLAYS }) {
+        library.tracks.sorted(trackSort, counts)
+    }
+    val albums = remember(library.tracks) { library.tracks.albums() }
+    val sortedAlbums = remember(albums, albumSort) { albums.sorted(albumSort) }
+    val artists = remember(library.tracks) { library.tracks.artists() }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val goBack: () -> Unit = { detail = (detail as? Detail.Group)?.from }
+
     val actions = TrackActions(
         data = data,
         toggleFavorite = appDataViewModel::toggleFavorite,
@@ -231,6 +263,7 @@ fun OngakuApp(
         ?.let { open -> data.playlists.firstOrNull { it.id == open.id } }
     val detailTitle = when (currentDetail) {
         is Detail.Group -> currentDetail.group.title
+        Detail.Search -> "Rechercher"
         Detail.Favorites -> "Favoris"
         Detail.RecentlyAdded -> "Ajouts récents"
         Detail.Top50 -> "Top 50"
@@ -255,7 +288,7 @@ fun OngakuApp(
                     title = { Text(detailTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         if (currentDetail != null) {
-                            IconButton(onClick = { detail = null }) {
+                            IconButton(onClick = goBack) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Retour")
                             }
                         }
@@ -269,6 +302,9 @@ fun OngakuApp(
                                 Icon(Icons.Rounded.Delete, "Supprimer la liste")
                             }
                         } else if (currentDetail == null) {
+                            IconButton(onClick = { detail = Detail.Search }) {
+                                Icon(Icons.Rounded.Search, "Rechercher")
+                            }
                             IconButton(onClick = { detail = Detail.Appearance }) {
                                 Icon(Icons.Rounded.Palette, "Apparence")
                             }
@@ -316,6 +352,17 @@ fun OngakuApp(
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
+                    )
+                    currentDetail == Detail.Search -> SearchScreen(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        tracks = sortedTracks,
+                        albums = sortedAlbums,
+                        artists = artists,
+                        currentId = currentId,
+                        actions = actions,
+                        onPlay = playerViewModel::play,
+                        onOpenGroup = { detail = Detail.Group(it, from = Detail.Search) },
                     )
                     currentDetail == Detail.Favorites -> TrackList(
                         tracks = library.tracks.filter { it.id in data.favorites },
@@ -377,11 +424,24 @@ fun OngakuApp(
                     else -> LibraryTabs(
                         tab = tab,
                         onTabChange = { tab = it },
-                        tracks = library.tracks,
+                        tracks = sortedTracks,
+                        trackSort = trackSort,
+                        onTrackSortChange = {
+                            trackSort = it
+                            sortStore.trackSort = it
+                        },
+                        albums = sortedAlbums,
+                        albumSort = albumSort,
+                        onAlbumSortChange = {
+                            albumSort = it
+                            sortStore.albumSort = it
+                        },
+                        artists = artists,
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
-                        onPlayAll = { shuffled -> playerViewModel.playAll(library.tracks, shuffled) },
+                        // « Lire » suit l'ordre affiché.
+                        onPlayAll = { shuffled -> playerViewModel.playAll(sortedTracks, shuffled) },
                         onOpenGroup = { detail = Detail.Group(it) },
                         onOpenFavorites = { detail = Detail.Favorites },
                         onOpenRecent = { detail = Detail.RecentlyAdded },
@@ -394,7 +454,7 @@ fun OngakuApp(
         }
 
         if (detail != null && !playerOpen) {
-            BackHandler { detail = null }
+            BackHandler(onBack = goBack)
         }
 
         if (playerOpen && player.current != null) {
@@ -551,6 +611,12 @@ private fun LibraryTabs(
     tab: Int,
     onTabChange: (Int) -> Unit,
     tracks: List<Track>,
+    trackSort: TrackSort,
+    onTrackSortChange: (TrackSort) -> Unit,
+    albums: List<TrackGroup>,
+    albumSort: AlbumSort,
+    onAlbumSortChange: (AlbumSort) -> Unit,
+    artists: List<TrackGroup>,
     currentId: String?,
     actions: TrackActions,
     onPlay: (List<Track>, Int) -> Unit,
@@ -562,9 +628,15 @@ private fun LibraryTabs(
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
 ) {
-    val albums = remember(tracks) { tracks.albums() }
-    val artists = remember(tracks) { tracks.artists() }
     val titles = listOf("Titres", "Albums", "Artistes", "Listes")
+    // Index par lettre seulement quand la liste est rangée par ordre alphabétique.
+    val trackLetters = remember(tracks, trackSort) {
+        if (trackSort.alphabetical) tracks.letterPositions { it.sortText(trackSort) } else null
+    }
+    val albumLetters = remember(albums, albumSort) {
+        if (albumSort.alphabetical) albums.letterPositions { it.sortText(albumSort) } else null
+    }
+    val artistLetters = remember(artists) { artists.letterPositions { it.title } }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -600,9 +672,26 @@ private fun LibraryTabs(
             }
         }
         when (tab) {
-            0 -> TrackList(tracks, currentId, actions, onPlay)
-            1 -> GroupList(albums, onOpenGroup)
-            2 -> GroupList(artists, onOpenGroup)
+            0 -> {
+                SortSelector(TrackSort.entries, trackSort, { it.label }, onTrackSortChange)
+                TrackList(tracks, currentId, actions, onPlay, letters = trackLetters)
+            }
+            1 -> {
+                SortSelector(AlbumSort.entries, albumSort, { it.label }, onAlbumSortChange)
+                GroupList(
+                    albums,
+                    onOpenGroup,
+                    letters = albumLetters,
+                    subtitle = { album ->
+                        if (albumSort == AlbumSort.YEAR) {
+                            listOfNotNull(album.subtitle, album.year?.toString()).joinToString(" · ")
+                        } else {
+                            album.subtitle
+                        }
+                    },
+                )
+            }
+            2 -> GroupList(artists, onOpenGroup, letters = artistLetters)
             else -> PlaylistsTab(
                 actions.data,
                 onOpenFavorites,
@@ -611,6 +700,110 @@ private fun LibraryTabs(
                 onOpenPlaylist,
                 onCreatePlaylist,
             )
+        }
+    }
+}
+
+/** « Trier par : Titre ▾ », avec le choix dans un menu. */
+@Composable
+private fun <T> SortSelector(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.padding(start = 8.dp)) {
+        TextButton(onClick = { open = true }) {
+            Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(8.dp))
+            Text("Trier par : ${label(selected)}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            label(option),
+                            fontWeight = if (option == selected) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    },
+                    onClick = {
+                        open = false
+                        onSelect(option)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Recherche dans toute la bibliothèque affichée, avec les résultats groupés par type. */
+@Composable
+private fun SearchScreen(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    tracks: List<Track>,
+    albums: List<TrackGroup>,
+    artists: List<TrackGroup>,
+    currentId: String?,
+    actions: TrackActions,
+    onPlay: (List<Track>, Int) -> Unit,
+    onOpenGroup: (TrackGroup) -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Clavier ouvert d'emblée, sauf au retour d'un album ouvert depuis les résultats.
+    LaunchedEffect(Unit) { if (query.isEmpty()) focusRequester.requestFocus() }
+    val results = remember(query, tracks, albums, artists) { search(query, tracks, albums, artists) }
+
+    Column(Modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .focusRequester(focusRequester),
+            placeholder = { Text("Titre, album ou artiste") },
+            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Rounded.Close, "Effacer la recherche")
+                    }
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+        )
+        when {
+            query.isBlank() -> CenteredMessage("Cherche dans tes titres, albums et artistes. Les accents et les majuscules ne comptent pas.")
+            results.isEmpty -> CenteredMessage("Aucun résultat pour « ${query.trim()} ».")
+            else -> LazyColumn(Modifier.fillMaxSize()) {
+                if (results.tracks.isNotEmpty()) {
+                    item(key = "titres") { SectionHeader("Titres (${results.tracks.size})") }
+                    itemsIndexed(results.tracks, key = { _, track -> "t${track.id}" }) { index, track ->
+                        TrackRow(track, track.id.toString() == currentId, actions) {
+                            keyboard?.hide()
+                            onPlay(results.tracks, index)
+                        }
+                    }
+                }
+                if (results.albums.isNotEmpty()) {
+                    item(key = "albums") { SectionHeader("Albums (${results.albums.size})") }
+                    items(results.albums, key = { "a${it.key}" }) { album ->
+                        ListRow(album.title, album.subtitle, album.artworkUri, onClick = { onOpenGroup(album) })
+                    }
+                }
+                if (results.artists.isNotEmpty()) {
+                    item(key = "artistes") { SectionHeader("Artistes (${results.artists.size})") }
+                    items(results.artists, key = { "r${it.key}" }) { artist ->
+                        ListRow(artist.title, artist.subtitle, artist.artworkUri, onClick = { onOpenGroup(artist) })
+                    }
+                }
+            }
         }
     }
 }
@@ -697,27 +890,44 @@ private fun TrackList(
     onPlay: (List<Track>, Int) -> Unit,
     emptyMessage: String = "",
     extraLabel: (Track) -> String? = { null },
+    letters: List<Pair<Char, Int>>? = null,
 ) {
     if (tracks.isEmpty()) {
         CenteredMessage(emptyMessage)
         return
     }
-    LazyColumn(Modifier.fillMaxSize()) {
-        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-            ListRow(
-                title = track.title,
-                subtitle = listOfNotNull(track.artist, formatTime(track.durationMs), extraLabel(track))
-                    .joinToString(" · "),
-                artworkUri = track.artworkUri,
-                highlighted = track.id.toString() == currentId,
-                onClick = { onPlay(tracks, index) },
-                trailing = {
-                    FavoriteButton(track.id, actions)
-                    TrackMenuButton(track.id, actions)
-                },
-            )
+    val listState = rememberLazyListState()
+    FastScrollList(listState, letters, tracks.size) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                TrackRow(track, track.id.toString() == currentId, actions, extraLabel(track)) {
+                    onPlay(tracks, index)
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun TrackRow(
+    track: Track,
+    highlighted: Boolean,
+    actions: TrackActions,
+    extraLabel: String? = null,
+    onClick: () -> Unit,
+) {
+    ListRow(
+        title = track.title,
+        subtitle = listOfNotNull(track.artist, formatTime(track.durationMs), extraLabel)
+            .joinToString(" · "),
+        artworkUri = track.artworkUri,
+        highlighted = highlighted,
+        onClick = onClick,
+        trailing = {
+            FavoriteButton(track.id, actions)
+            TrackMenuButton(track.id, actions)
+        },
+    )
 }
 
 @Composable
@@ -778,15 +988,23 @@ private fun MenuEntry(text: String, icon: ImageVector, onClick: () -> Unit) {
 }
 
 @Composable
-private fun GroupList(groups: List<TrackGroup>, onOpen: (TrackGroup) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        itemsIndexed(groups, key = { _, group -> group.key }) { _, group ->
-            ListRow(
-                title = group.title,
-                subtitle = group.subtitle,
-                artworkUri = group.artworkUri,
-                onClick = { onOpen(group) },
-            )
+private fun GroupList(
+    groups: List<TrackGroup>,
+    onOpen: (TrackGroup) -> Unit,
+    letters: List<Pair<Char, Int>>? = null,
+    subtitle: (TrackGroup) -> String = { it.subtitle },
+) {
+    val listState = rememberLazyListState()
+    FastScrollList(listState, letters, groups.size) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            items(groups, key = { it.key }) { group ->
+                ListRow(
+                    title = group.title,
+                    subtitle = subtitle(group),
+                    artworkUri = group.artworkUri,
+                    onClick = { onOpen(group) },
+                )
+            }
         }
     }
 }
