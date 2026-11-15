@@ -29,11 +29,15 @@ Déplacer une carte : modifier `columnId`, `order` et `updatedAt` dans son fichi
 ## Compiler
 
 ```bash
-./gradlew assembleDebug     # Windows : .\gradlew.bat assembleDebug (le .\ est obligatoire)
-./gradlew installDebug
+./gradlew assembleRelease   # Windows : .\gradlew.bat assembleRelease (le .\ est obligatoire)
+./gradlew assembleDebug
 ```
 
 `JAVA_HOME` doit pointer vers un JDK 17 ou plus récent.
+
+- Le téléphone de l'utilisateur tourne en **version de publication** : y réinstaller la publication après un test en débogage.
+- Les deux versions sont signées avec la clé de `keystore.properties` (hors dépôt) : passer de l'une à l'autre ne demande pas de désinstaller. **Ne jamais désinstaller l'application du téléphone** : cela efface les listes, les favoris, les réglages et les widgets.
+- Un plantage qui n'arrive qu'en publication vient en général de R8 : ajouter la règle dans `app/proguard-rules.pro`.
 
 ## Tester sur le téléphone
 

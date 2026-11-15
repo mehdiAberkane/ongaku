@@ -31,18 +31,43 @@ jamais dans les fichiers audio.
 
 ## Compiler et installer
 
-```bash
-./gradlew assembleDebug
-```
-
-L'APK est produit dans `app/build/outputs/apk/debug/`. Pour l'installer sur un téléphone branché
-en USB avec le débogage activé :
+Pour l'usage quotidien, installez la **version de publication** : le code est réduit et optimisé
+par R8 et un profil de démarrage est fourni, ce qui la rend nettement plus fluide que la version
+de débogage (défilement, ouverture de l'écran de lecture, démarrage).
 
 ```bash
-./gradlew installDebug
+./gradlew installRelease
 ```
+
+L'APK est produit dans `app/build/outputs/apk/release/`. Pour le développement, la version de
+débogage reste disponible avec `./gradlew installDebug`.
 
 Sous Windows, utilisez `gradlew.bat` à la place de `./gradlew`.
+
+### Clé de signature
+
+La clé ne fait pas partie du dépôt. Créez-la une fois, hors du dépôt :
+
+```bash
+keytool -genkeypair -keystore ~/.android-signing/ongaku-release.jks -storetype PKCS12 \
+  -alias ongaku -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Ongaku"
+```
+
+puis un fichier `keystore.properties` à la racine du projet (ignoré par Git) :
+
+```properties
+storeFile=/chemin/absolu/vers/ongaku-release.jks
+storePassword=…
+keyAlias=ongaku
+keyPassword=…
+```
+
+Avec ce fichier, la version de publication **et** la version de débogage sont signées avec cette
+clé : on peut passer de l'une à l'autre sur le téléphone sans désinstaller, donc sans perdre ses
+listes ni ses réglages. Sans ce fichier, la version de publication est produite non signée.
+
+Gardez une copie de la clé et de son mot de passe en lieu sûr : sans elle, une mise à jour
+oblige à désinstaller l'application, ce qui efface les listes, les favoris et les réglages.
 
 ## Permissions
 
