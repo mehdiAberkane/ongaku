@@ -10,8 +10,8 @@ Les tickets sont dans le tableau Todoom « Ongaku » (un fichier JSON par carte)
 
 1. **On ne fait que les tickets de la colonne « À faire ».** Ne jamais toucher aux autres colonnes (« Backlog », « En cours » d'un autre travail, « A verifier », « Terminé ») ni aux cartes qu'elles contiennent, même si on le demande en passant : le signaler à l'utilisateur.
 2. En commençant un ticket, le déplacer de « À faire » vers « En cours », avant de coder.
-3. Développer sur une branche dédiée, commiter, ouvrir la pull request vers `main` sur GitHub (c'est la « MR » dont parle l'utilisateur), puis la fusionner.
-4. Une fois fusionnée : revenir sur `main` et la mettre à jour (`git checkout main` puis `git pull`), puis déplacer le ticket de « En cours » vers « A verifier ».
+3. Développer sur une branche dédiée, commiter, ouvrir la pull request vers `main` sur GitHub (c'est la « MR » dont parle l'utilisateur), puis activer sa fusion automatique (`gh pr merge <n> --auto --squash`) : GitHub la fusionne dès que la CI est verte, jamais avant (contrôle obligatoire sur `main`).
+4. Une fois fusionnée : revenir sur `main` et la mettre à jour (`git checkout main` puis `git pull`), puis déplacer le ticket de « En cours » vers « A verifier ». L'agent n'est pas prévenu de la fusion : il vérifie l'état de la pull request au message suivant de l'utilisateur.
 5. « A verifier » → « Terminé » : **uniquement l'utilisateur**, qui teste lui-même.
 
 Les seuls déplacements permis à l'agent : « À faire » → « En cours » → « A verifier ». Si la pull request ne couvre qu'une partie d'un ticket, le dire et ne pas le déplacer vers « A verifier ».

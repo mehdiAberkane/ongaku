@@ -23,7 +23,9 @@ import fr.devsecopsforce.ongaku.data.MusicRepository
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.toMediaItem
 import fr.devsecopsforce.ongaku.playback.PlaybackService
+import fr.devsecopsforce.ongaku.playback.QueueCommands
 import fr.devsecopsforce.ongaku.playback.ResumeQueue
+import fr.devsecopsforce.ongaku.playback.playOrder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,6 +115,8 @@ data class PlayerState(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queue: List<MediaItem> = emptyList(),
     val currentIndex: Int = 0,
+    /** Positions de [queue] dans l'ordre où elles seront jouées (mélangé en lecture aléatoire). */
+    val playOrder: List<Int> = emptyList(),
 )
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -172,6 +176,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             repeatMode = player.repeatMode,
             queue = List(player.mediaItemCount) { player.getMediaItemAt(it) },
             currentIndex = player.currentMediaItemIndex,
+            playOrder = player.playOrder(),
         )
     }
 
@@ -205,6 +210,59 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (tracks.isEmpty()) return
         controller?.shuffleModeEnabled = shuffled
         play(tracks, if (shuffled) tracks.indices.random() else 0)
+    }
+
+    /** « Lire ensuite » : juste après le morceau en cours, même en lecture aléatoire. */
+    fun playNext(tracks: List<Track>) = enqueue(tracks, next = true)
+
+    /** « Ajouter à la file » : après tous les morceaux restants. */
+    fun addToQueue(tracks: List<Track>) = enqueue(tracks, next = false)
+
+    private fun enqueue(tracks: List<Track>, next: Boolean) {
+        if (tracks.isEmpty()) return
+        val player = controller ?: return
+        if (player.mediaItemCount == 0) {
+            play(tracks, 0)
+            return
+        }
+        restoreJob?.cancel()
+        if (!player.shuffleModeEnabled) {
+            val start = if (next) player.currentMediaItemIndex + 1 else player.mediaItemCount
+            player.addMediaItems(start, tracks.map(Track::toMediaItem))
+            return
+        }
+        // En lecture aléatoire, Media3 rangerait les ajouts au hasard : le service les ajoute et les
+        // range lui-même. Par paquets, et à l'envers pour « Lire ensuite » : chaque paquet se place
+        // juste après le morceau en cours, devant le précédent.
+        val chunks = tracks.chunked(QueueCommands.MAX_ITEMS_PER_COMMAND)
+        (if (next) chunks.asReversed() else chunks).forEach { chunk ->
+            player.sendCustomCommand(QueueCommands.ADD, QueueCommands.addArgs(chunk, next))
+        }
+    }
+
+    /** Retire de la file le morceau à cette position de la file (pas de l'ordre de lecture). */
+    fun removeFromQueue(index: Int) {
+        controller?.takeIf { index in 0 until it.mediaItemCount }?.removeMediaItem(index)
+    }
+
+    /** Déplace un morceau dans l'ordre de lecture, de la position [from] à [to]. */
+    fun moveInQueue(from: Int, to: Int) {
+        val player = controller ?: return
+        if (player.shuffleModeEnabled) {
+            player.sendCustomCommand(QueueCommands.MOVE, QueueCommands.moveArgs(from, to))
+        } else {
+            // Sans lecture aléatoire, l'ordre de lecture est celui de la file.
+            player.moveMediaItem(from, to)
+        }
+    }
+
+    /** Vide la file en gardant le morceau en cours. */
+    fun clearQueue() {
+        controller?.run {
+            val current = currentMediaItemIndex
+            if (current + 1 < mediaItemCount) removeMediaItems(current + 1, mediaItemCount)
+            if (current > 0) removeMediaItems(0, current)
+        }
     }
 
     fun togglePlayPause() {

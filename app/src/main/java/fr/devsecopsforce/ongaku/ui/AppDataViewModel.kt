@@ -123,6 +123,17 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
+    /** Nouvelle liste déjà remplie, par exemple depuis la file d'attente. */
+    fun createPlaylistWith(name: String, trackIds: List<Long>) = mutate { data ->
+        data.copy(
+            playlists = data.playlists + Playlist(
+                id = UUID.randomUUID().toString(),
+                name = name.trim(),
+                trackIds = trackIds.distinct(),
+            ),
+        )
+    }
+
     fun renamePlaylist(id: String, name: String) = updatePlaylist(id) { it.copy(name = name.trim()) }
 
     fun deletePlaylist(id: String) = mutate { data ->

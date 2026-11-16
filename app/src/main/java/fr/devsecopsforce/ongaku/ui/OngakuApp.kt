@@ -7,12 +7,14 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,11 +38,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -91,12 +95,14 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -104,6 +110,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -135,7 +144,9 @@ import fr.devsecopsforce.ongaku.data.letterPositions
 import fr.devsecopsforce.ongaku.data.search
 import fr.devsecopsforce.ongaku.data.sortText
 import fr.devsecopsforce.ongaku.data.sorted
+import fr.devsecopsforce.ongaku.playback.QueueOrder
 import java.io.File
+import kotlin.math.roundToInt
 
 private val audioPermission: String
     get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -164,6 +175,8 @@ private data class TrackActions(
     val addToPlaylist: (Long) -> Unit,
     val pickBackground: (Long) -> Unit,
     val removeBackground: (Long) -> Unit,
+    val playNext: (Long) -> Unit,
+    val addToQueue: (Long) -> Unit,
     val removeFromPlaylist: ((Long) -> Unit)? = null,
 )
 
@@ -232,6 +245,12 @@ fun OngakuApp(
     val tracksById = remember(library.tracks) { library.tracks.associateBy { it.id } }
     // Tous les morceaux du téléphone : un morceau masqué par le filtre n'est pas introuvable.
     val existingIds = remember(library.allTracks) { library.allTracks.mapTo(HashSet()) { it.id } }
+    val allTracksById = remember(library.allTracks) { library.allTracks.associateBy { it.id } }
+    val enqueue: (List<Track>, Boolean) -> Unit = { tracks, next ->
+        if (next) playerViewModel.playNext(tracks) else playerViewModel.addToQueue(tracks)
+        val what = tracks.singleOrNull()?.title ?: "${tracks.size} titres"
+        Toast.makeText(context, if (next) "Lu ensuite : $what" else "Ajouté à la file : $what", Toast.LENGTH_SHORT).show()
+    }
     val identityReport by LibraryIdentity.pendingReport.collectAsStateWithLifecycle()
     val dataNotice by AppDataStore.pendingNotice.collectAsStateWithLifecycle()
     val playCounts = remember { PlayCounts(context) }
@@ -262,6 +281,8 @@ fun OngakuApp(
         addToPlaylist = { addingTrackId = it },
         pickBackground = { pickImage("track:$it") },
         removeBackground = { appDataViewModel.removeBackground(BackgroundTarget.Track(it)) },
+        playNext = { id -> allTracksById[id]?.let { enqueue(listOf(it), true) } },
+        addToQueue = { id -> allTracksById[id]?.let { enqueue(listOf(it), false) } },
     )
 
     val currentDetail = detail
@@ -300,6 +321,19 @@ fun OngakuApp(
                         }
                     },
                     actions = {
+                        // Album, artiste, favoris ou liste ouverts : tout ajouter à la file.
+                        val detailTracks = when (currentDetail) {
+                            is Detail.Group -> currentDetail.group.tracks
+                            Detail.Favorites -> library.tracks.filter { it.id in data.favorites }
+                            is Detail.PlaylistDetail -> currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get)
+                            else -> emptyList()
+                        }
+                        if (detailTracks.isNotEmpty()) {
+                            QueueMenuButton(
+                                onPlayNext = { enqueue(detailTracks, true) },
+                                onAddToQueue = { enqueue(detailTracks, false) },
+                            )
+                        }
                         if (currentPlaylist != null) {
                             IconButton(onClick = { renamingPlaylist = currentPlaylist }) {
                                 Icon(Icons.Rounded.Edit, "Renommer la liste")
@@ -486,6 +520,10 @@ fun OngakuApp(
                 actions = actions,
                 background = appDataViewModel.backgroundFile(playerBackgroundName(data, trackId)),
                 onClose = { playerOpen = false },
+                onSaveQueue = { name, ids ->
+                    appDataViewModel.createPlaylistWith(name, ids)
+                    Toast.makeText(context, "Liste « ${name.trim()} » créée", Toast.LENGTH_SHORT).show()
+                },
             )
         }
     }
@@ -1059,14 +1097,45 @@ private fun FavoriteButton(trackId: Long, actions: TrackActions) {
     }
 }
 
+/** Menu d'un album, d'un artiste ou d'une liste ouverts. */
 @Composable
-private fun TrackMenuButton(trackId: Long, actions: TrackActions) {
+private fun QueueMenuButton(onPlayNext: () -> Unit, onAddToQueue: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Rounded.MoreVert, "Options de la liste")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            MenuEntry("Lire ensuite", Icons.AutoMirrored.Rounded.PlaylistPlay) {
+                open = false
+                onPlayNext()
+            }
+            MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
+                open = false
+                onAddToQueue()
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackMenuButton(trackId: Long, actions: TrackActions, queueEntries: Boolean = true) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(Icons.Rounded.MoreVert, "Options du morceau")
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (queueEntries) {
+                MenuEntry("Lire ensuite", Icons.AutoMirrored.Rounded.PlaylistPlay) {
+                    open = false
+                    actions.playNext(trackId)
+                }
+                MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
+                    open = false
+                    actions.addToQueue(trackId)
+                }
+            }
             MenuEntry("Ajouter à une liste", Icons.AutoMirrored.Rounded.PlaylistAdd) {
                 open = false
                 actions.addToPlaylist(trackId)
@@ -1262,6 +1331,7 @@ private fun FullPlayer(
     actions: TrackActions?,
     background: File?,
     onClose: () -> Unit,
+    onSaveQueue: ((name: String, trackIds: List<Long>) -> Unit)? = null,
 ) {
     val metadata = player.current?.mediaMetadata
     var queueOpen by remember { mutableStateOf(false) }
@@ -1303,7 +1373,8 @@ private fun FullPlayer(
                         IconButton(onClick = { queueOpen = true }) {
                             Icon(Icons.AutoMirrored.Rounded.QueueMusic, "File d'attente")
                         }
-                        TrackMenuButton(trackId, actions)
+                        // Le morceau en cours : « Lire ensuite » n'aurait pas de sens.
+                        TrackMenuButton(trackId, actions, queueEntries = false)
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -1378,19 +1449,156 @@ private fun FullPlayer(
     }
 
     if (queueOpen) {
-        ModalBottomSheet(onDismissRequest = { queueOpen = false }) {
-            LazyColumn {
-                itemsIndexed(player.queue) { index, item ->
+        QueueSheet(player, viewModel, onSaveQueue, onDismiss = { queueOpen = false })
+    }
+}
+
+/**
+ * File d'attente, dans l'ordre où elle sera jouée, ouverte sur le morceau en cours. La poignée à
+ * droite de chaque ligne se fait glisser pour la déplacer.
+ */
+@Composable
+private fun QueueSheet(
+    player: PlayerState,
+    viewModel: PlayerViewModel,
+    onSaveQueue: ((name: String, trackIds: List<Long>) -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    val order = player.playOrder.takeIf { it.size == player.queue.size } ?: player.queue.indices.toList()
+    // Ordre affiché après un glissement, le temps que le lecteur confirme.
+    var pendingOrder by remember { mutableStateOf<List<Int>?>(null) }
+    LaunchedEffect(player.playOrder, player.queue) { pendingOrder = null }
+    var dragged by remember { mutableStateOf<Int?>(null) } // position de départ
+    var target by remember { mutableIntStateOf(0) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableIntStateOf(1) }
+    var saving by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+
+    val base = pendingOrder ?: order
+    val shown = dragged?.let { QueueOrder.move(base, it, target) } ?: base
+    val currentPosition = base.indexOf(player.currentIndex).coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (currentPosition - 1).coerceAtLeast(0))
+
+    // Sans geste sur la feuille : sinon glisser une poignée vers le bas fermerait la file.
+    // Elle se ferme en touchant à côté ou avec Retour.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetGesturesEnabled = false) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "File d'attente · ${countLabel(player.queue.size)}",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (onSaveQueue != null) {
+                TextButton(onClick = { saving = true }) { Text("Enregistrer") }
+            }
+            TextButton(onClick = { confirmClear = true }, enabled = player.queue.size > 1) { Text("Vider") }
+        }
+        LazyColumn(state = listState) {
+            itemsIndexed(shown, key = { _, index -> index }) { position, index ->
+                val item = player.queue.getOrNull(index) ?: return@itemsIndexed
+                val isDragged = dragged?.let { from -> position == target && base.getOrNull(from) == index } == true
+                val currentPos by rememberUpdatedState(position)
+                Box(
+                    Modifier
+                        .onSizeChanged { rowHeight = it.height.coerceAtLeast(1) }
+                        .zIndex(if (isDragged) 1f else 0f)
+                        .graphicsLayer {
+                            // Lu au dessin, parfois après le relâchement : le glissement peut déjà être fini.
+                            val from = dragged
+                            if (isDragged && from != null) {
+                                translationY = offset - (target - from) * rowHeight
+                                shadowElevation = 8f
+                            }
+                        }
+                        .background(
+                            if (isDragged) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                        ),
+                ) {
                     ListRow(
                         title = item.mediaMetadata.title?.toString().orEmpty(),
                         subtitle = item.mediaMetadata.artist?.toString().orEmpty(),
                         artworkUri = item.mediaMetadata.artworkUri,
                         highlighted = index == player.currentIndex,
                         onClick = { viewModel.playQueueItem(index) },
+                        trailing = {
+                            if (index != player.currentIndex) {
+                                IconButton(onClick = { viewModel.removeFromQueue(index) }) {
+                                    Icon(Icons.Rounded.Close, "Retirer de la file")
+                                }
+                            }
+                            Icon(
+                                Icons.Rounded.DragHandle,
+                                "Déplacer",
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                                    .pointerInput(index) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                dragged = currentPos
+                                                target = currentPos
+                                                offset = 0f
+                                            },
+                                            onDrag = { change, amount ->
+                                                change.consume()
+                                                val from = dragged ?: return@detectDragGestures
+                                                offset += amount.y
+                                                target = (from + (offset / rowHeight).roundToInt())
+                                                    .coerceIn(0, base.lastIndex)
+                                            },
+                                            onDragEnd = {
+                                                val from = dragged
+                                                if (from != null && from != target) {
+                                                    pendingOrder = QueueOrder.move(base, from, target)
+                                                    viewModel.moveInQueue(from, target)
+                                                }
+                                                dragged = null
+                                                offset = 0f
+                                            },
+                                            onDragCancel = {
+                                                dragged = null
+                                                offset = 0f
+                                            },
+                                        )
+                                    },
+                            )
+                        },
                     )
                 }
             }
         }
+    }
+
+    if (saving && onSaveQueue != null) {
+        NameDialog(
+            title = "Enregistrer la file comme liste",
+            initial = "",
+            onConfirm = { name ->
+                onSaveQueue(name, base.mapNotNull { player.queue.getOrNull(it)?.mediaId?.toLongOrNull() })
+                saving = false
+            },
+            onDismiss = { saving = false },
+        )
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Vider la file ?") },
+            text = { Text("Seul le morceau en cours reste dans la file.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearQueue()
+                        confirmClear = false
+                    },
+                ) { Text("Vider") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Annuler") } },
+        )
     }
 }
 
