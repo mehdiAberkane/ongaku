@@ -41,18 +41,22 @@ data class TrackGroup(
     val year: Int? = null,
 )
 
-fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
-    .setMediaId(id.toString())
-    .setUri(uri)
-    .setMediaMetadata(
-        MediaMetadata.Builder()
-            .setTitle(title)
-            .setArtist(artist)
-            .setAlbumTitle(album)
-            .setArtworkUri(artworkUri)
-            .build(),
-    )
-    .build()
+fun Track.toMediaItem(): MediaItem = mediaItem(id, title, artist, album, artworkUri)
+
+/** Élément de lecture d'un morceau de MediaStore, à partir de son identifiant et de ses tags. */
+fun mediaItem(id: Long, title: String, artist: String, album: String, artworkUri: Uri?): MediaItem =
+    MediaItem.Builder()
+        .setMediaId(id.toString())
+        .setUri(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id))
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(artist)
+                .setAlbumTitle(album)
+                .setArtworkUri(artworkUri)
+                .build(),
+        )
+        .build()
 
 private fun List<Track>.mainArtist(): String =
     groupingBy { it.artist }.eachCount().maxBy { it.value }.key

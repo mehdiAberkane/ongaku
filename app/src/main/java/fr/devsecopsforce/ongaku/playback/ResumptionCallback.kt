@@ -4,8 +4,14 @@
 package fr.devsecopsforce.ongaku.playback
 
 import android.content.Context
+import android.os.Bundle
 import androidx.media3.common.C
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import fr.devsecopsforce.ongaku.data.LibraryFilterStore
@@ -54,11 +60,43 @@ object ResumeQueue {
     }
 }
 
-/** Reprise déclenchée par le système, par exemple depuis un casque Bluetooth. */
+/**
+ * Réponses de la session : reprise déclenchée par le système (casque Bluetooth…), et commandes de
+ * file propres à Ongaku ([QueueCommands]).
+ */
 class ResumptionCallback(
     private val context: Context,
     private val scope: CoroutineScope,
 ) : MediaSession.Callback {
+
+    override fun onConnect(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+    ): MediaSession.ConnectionResult {
+        // Les commandes de file ne sont proposées qu'à Ongaku lui-même ; les autres applications
+        // reçoivent la réponse par défaut de Media3.
+        if (controller.packageName != context.packageName) return super.onConnect(session, controller)
+        return MediaSession.ConnectionResult.accept(
+            MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(QueueCommands.ADD)
+                .add(QueueCommands.MOVE)
+                .build(),
+            MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
+        )
+    }
+
+    override fun onCustomCommand(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle,
+    ): ListenableFuture<SessionResult> {
+        val player = session.player as? ExoPlayer
+        val handled = player != null && QueueCommands.apply(player, customCommand, args)
+        return Futures.immediateFuture(
+            SessionResult(if (handled) SessionResult.RESULT_SUCCESS else SessionError.ERROR_NOT_SUPPORTED),
+        )
+    }
 
     override fun onPlaybackResumption(
         mediaSession: MediaSession,
