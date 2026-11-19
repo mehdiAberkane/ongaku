@@ -28,6 +28,8 @@ data class AppData(
     val appBackground: String? = null,
     val playerBackground: String? = null,
     val trackBackgrounds: Map<Long, String> = emptyMap(),
+    /** Image du widget : prioritaire sur l'image du morceau, la pochette et l'image par défaut. */
+    val widgetBackground: String? = null,
 )
 
 /**
@@ -144,6 +146,7 @@ class AppDataStore(context: Context) {
             )
             .put("appBackground", data.appBackground ?: JSONObject.NULL)
             .put("playerBackground", data.playerBackground ?: JSONObject.NULL)
+            .put("widgetBackground", data.widgetBackground ?: JSONObject.NULL)
             .put(
                 "trackBackgrounds",
                 JSONObject().apply {
@@ -194,6 +197,7 @@ class AppDataStore(context: Context) {
             appBackground = json.optStringStrict("appBackground"),
             playerBackground = json.optStringStrict("playerBackground"),
             trackBackgrounds = backgrounds,
+            widgetBackground = json.optStringStrict("widgetBackground"),
         )
         val unknown = JSONObject()
         json.keys().forEach { key -> if (key !in KNOWN_FIELDS) unknown.put(key, json.get(key)) }
@@ -239,6 +243,7 @@ class AppDataStore(context: Context) {
         const val MAX_CORRUPT_COPIES = 5
         private val KNOWN_FIELDS = setOf(
             "version", "favorites", "playlists", "appBackground", "playerBackground", "trackBackgrounds",
+            "widgetBackground",
         )
 
         /**

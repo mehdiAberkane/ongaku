@@ -11,6 +11,7 @@ import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistBackup
 import fr.devsecopsforce.ongaku.data.Track
+import fr.devsecopsforce.ongaku.widget.WidgetDisplay
 import java.io.File
 import java.io.IOException
 import java.util.UUID
@@ -28,6 +29,7 @@ sealed interface BackgroundTarget {
     data object App : BackgroundTarget
     data object Player : BackgroundTarget
     data class Track(val id: Long) : BackgroundTarget
+    data object Widget : BackgroundTarget
 }
 
 class AppDataViewModel(application: Application) : AndroidViewModel(application) {
@@ -252,8 +254,14 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                         },
                     )
                 }
+                BackgroundTarget.Widget -> {
+                    previous = data.widgetBackground
+                    data.copy(widgetBackground = name)
+                }
             }
         }
         backgroundFile(previous)?.delete()
+        // Toutes ces images peuvent apparaître dans le widget : il se redessine aussitôt.
+        WidgetDisplay.render(getApplication())
     }
 }

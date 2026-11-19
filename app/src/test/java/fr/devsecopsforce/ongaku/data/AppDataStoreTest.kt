@@ -25,6 +25,7 @@ class AppDataStoreTest {
         appBackground = "fond.img",
         playerBackground = null,
         trackBackgrounds = mapOf(5L to "cinq.img"),
+        widgetBackground = "widget.img",
     )
 
     @Before

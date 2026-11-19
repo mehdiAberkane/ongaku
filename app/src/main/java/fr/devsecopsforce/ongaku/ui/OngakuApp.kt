@@ -676,6 +676,7 @@ fun LockScreenPlayer(
 private fun decodeTarget(value: String?): BackgroundTarget? = when {
     value == "app" -> BackgroundTarget.App
     value == "player" -> BackgroundTarget.Player
+    value == "widget" -> BackgroundTarget.Widget
     value?.startsWith("track:") == true ->
         value.removePrefix("track:").toLongOrNull()?.let(BackgroundTarget::Track)
     else -> null
