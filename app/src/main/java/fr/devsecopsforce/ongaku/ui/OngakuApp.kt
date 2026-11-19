@@ -408,13 +408,19 @@ fun OngakuApp(
                         missing = data.favorites.count { it !in existingIds },
                         onRemove = { appDataViewModel.removeMissingFavorites(existingIds) },
                     ) {
-                        TrackList(
-                            tracks = library.tracks.filter { it.id in data.favorites },
-                            currentId = currentId,
-                            actions = actions,
-                            onPlay = playerViewModel::play,
-                            emptyMessage = "Touche le cœur d'un morceau pour l'ajouter ici.",
-                        )
+                        val favorites = library.tracks.filter { it.id in data.favorites }
+                        Column(Modifier.fillMaxSize()) {
+                            if (favorites.isNotEmpty()) {
+                                PlayAllButtons { shuffled -> playerViewModel.playAll(favorites, shuffled) }
+                            }
+                            TrackList(
+                                tracks = favorites,
+                                currentId = currentId,
+                                actions = actions,
+                                onPlay = playerViewModel::play,
+                                emptyMessage = "Touche le cœur d'un morceau pour l'ajouter ici.",
+                            )
+                        }
                     }
                     currentDetail == Detail.RecentlyAdded -> TrackList(
                         tracks = remember(library.tracks) {
@@ -750,29 +756,7 @@ private fun LibraryTabs(
     val artistLetters = remember(artists) { artists.letterPositions { it.title } }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Button(
-                onClick = { onPlayAll(false) },
-                modifier = Modifier.weight(1f).height(56.dp),
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                Spacer(Modifier.size(8.dp))
-                Text("Lire", maxLines = 1)
-            }
-            FilledTonalButton(
-                onClick = { onPlayAll(true) },
-                modifier = Modifier.weight(1f).height(56.dp),
-            ) {
-                Icon(Icons.Rounded.Shuffle, contentDescription = null)
-                Spacer(Modifier.size(8.dp))
-                Text("Lecture aléatoire", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
+        PlayAllButtons(onPlayAll)
         PrimaryTabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
             titles.forEachIndexed { index, title ->
                 Tab(
@@ -812,6 +796,34 @@ private fun LibraryTabs(
                 onOpenPlaylist,
                 onCreatePlaylist,
             )
+        }
+    }
+}
+
+/** « Lire » et « Lecture aléatoire » : remplacent la lecture en cours par toute la liste affichée. */
+@Composable
+private fun PlayAllButtons(onPlayAll: (shuffled: Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Button(
+            onClick = { onPlayAll(false) },
+            modifier = Modifier.weight(1f).height(56.dp),
+        ) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Lire", maxLines = 1)
+        }
+        FilledTonalButton(
+            onClick = { onPlayAll(true) },
+            modifier = Modifier.weight(1f).height(56.dp),
+        ) {
+            Icon(Icons.Rounded.Shuffle, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Lecture aléatoire", maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
