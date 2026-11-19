@@ -88,12 +88,14 @@ class PlaybackStateKeeper(
     }
 
     private fun publish(playing: Boolean) {
-        val metadata = player.currentMediaItem?.mediaMetadata ?: return
+        val item = player.currentMediaItem ?: return
+        val metadata = item.mediaMetadata
+        val trackId = item.mediaId.toLongOrNull()
         val title = metadata.title?.toString()
         val artist = metadata.artist?.toString()
         val artwork = metadata.artworkUri
         scope.launch(Dispatchers.IO) {
-            WidgetDisplay.save(context, title, artist, artwork, playing)
+            WidgetDisplay.save(context, trackId, title, artist, artwork, playing)
             WidgetDisplay.render(context)
         }
     }
@@ -103,9 +105,11 @@ class PlaybackStateKeeper(
         handler.removeCallbacks(periodicSave)
         savePosition()
         player.removeListener(this)
-        val metadata = player.currentMediaItem?.mediaMetadata ?: return
+        val item = player.currentMediaItem ?: return
+        val metadata = item.mediaMetadata
         WidgetDisplay.save(
             context,
+            item.mediaId.toLongOrNull(),
             metadata.title?.toString(),
             metadata.artist?.toString(),
             metadata.artworkUri,

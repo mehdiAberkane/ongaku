@@ -14,12 +14,24 @@ import androidx.core.content.edit
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
 import fr.devsecopsforce.ongaku.R
+import fr.devsecopsforce.ongaku.data.AppDataStore
+import java.io.File
 import java.io.IOException
+import kotlin.concurrent.thread
 
 /** Format ligne ; garde ce nom pour ne pas casser les widgets déjà posés. */
 open class OngakuWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
-        WidgetDisplay.render(context)
+        // Lecture du fichier des listes et décodage d'image : hors du fil principal.
+        val pending = goAsync()
+        val app = context.applicationContext
+        thread(name = "OngakuWidget") {
+            try {
+                WidgetDisplay.render(app)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 }
 
@@ -45,8 +57,9 @@ object WidgetDisplay {
         Format(OngakuSquareWidget::class.java, R.layout.widget_ongaku_square, R.drawable.widget_background),
     )
 
-    fun save(context: Context, title: String?, artist: String?, artwork: Uri?, playing: Boolean) {
+    fun save(context: Context, trackId: Long?, title: String?, artist: String?, artwork: Uri?, playing: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
+            if (trackId == null) remove("track") else putLong("track", trackId)
             putString("title", title)
             putString("artist", artist)
             putString("artwork", artwork?.toString())
@@ -54,6 +67,7 @@ object WidgetDisplay {
         }
     }
 
+    /** À appeler hors du fil principal : lit le fichier des listes et décode une image. */
     fun render(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val placed = formats.map { format ->
@@ -62,10 +76,21 @@ object WidgetDisplay {
         if (placed.isEmpty()) return
 
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val artwork = prefs.getString("artwork", null)?.let { loadArtwork(context, it.toUri()) }
+        val data = synchronized(AppDataStore.lock) { AppDataStore(context).load() }
+        val trackId = if (prefs.contains("track")) prefs.getLong("track", 0) else null
+        val image = WidgetImage.candidates(data, trackId, prefs.getString("artwork", null))
+            .firstNotNullOfOrNull { load(context, it) }
         placed.forEach { (format, ids) ->
-            manager.updateAppWidget(ids, buildViews(context, format, artwork))
+            manager.updateAppWidget(ids, buildViews(context, format, image))
         }
+    }
+
+    private fun load(context: Context, image: WidgetImage): Bitmap? = when (image) {
+        is WidgetImage.Background -> {
+            val file = File(context.filesDir, "backgrounds/${image.name}")
+            if (file.exists()) decodeScaled { options -> BitmapFactory.decodeFile(file.path, options) } else null
+        }
+        is WidgetImage.Artwork -> loadArtwork(context, image.uri.toUri())
     }
 
     private fun buildViews(context: Context, format: Format, artwork: Bitmap?): RemoteViews {
@@ -110,26 +135,27 @@ object WidgetDisplay {
 
     private fun loadArtwork(context: Context, uri: Uri): Bitmap? = try {
         context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFileDescriptor(descriptor.fileDescriptor, null, bounds)
-            var sample = 1
-            while (bounds.outWidth / (sample * 2) >= ARTWORK_SIZE_PX) sample *= 2
-            BitmapFactory.decodeFileDescriptor(
-                descriptor.fileDescriptor,
-                null,
-                BitmapFactory.Options().apply { inSampleSize = sample },
-            )?.let { bitmap ->
-                // Une image trop lourde ferait échouer la mise à jour du widget.
-                if (bitmap.width > ARTWORK_SIZE_PX) {
-                    bitmap.scale(ARTWORK_SIZE_PX, bitmap.height * ARTWORK_SIZE_PX / bitmap.width)
-                } else {
-                    bitmap
-                }
-            }
+            decodeScaled { options -> BitmapFactory.decodeFileDescriptor(descriptor.fileDescriptor, null, options) }
         }
     } catch (e: IOException) {
         null
     } catch (e: SecurityException) {
         null
+    }
+
+    /**
+     * Décode en réduisant : une image trop lourde ferait échouer la mise à jour du widget.
+     * [decode] est appelé deux fois, d'abord pour lire les dimensions.
+     */
+    private fun decodeScaled(decode: (BitmapFactory.Options) -> Bitmap?): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        decode(bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= ARTWORK_SIZE_PX) sample *= 2
+        val bitmap = decode(BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        val shortest = minOf(bitmap.width, bitmap.height)
+        if (shortest <= ARTWORK_SIZE_PX) return bitmap
+        return bitmap.scale(bitmap.width * ARTWORK_SIZE_PX / shortest, bitmap.height * ARTWORK_SIZE_PX / shortest)
     }
 }

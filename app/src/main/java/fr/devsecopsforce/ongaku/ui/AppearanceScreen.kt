@@ -91,6 +91,17 @@ fun AppearanceScreen(
         )
         Note("Pour une image propre à un morceau, ouvre le menu ⋮ de ce morceau.")
         Spacer(Modifier.height(12.dp))
+        ImageRow(
+            label = "Widget",
+            file = backgroundFile(data.widgetBackground),
+            onPick = { onPick("widget") },
+            onRemove = { onRemove(BackgroundTarget.Widget) },
+        )
+        Note(
+            "Sans image choisie ici, le widget montre l'image du morceau, sa pochette, " +
+                "ou à défaut l'image de l'écran de lecture.",
+        )
+        Spacer(Modifier.height(12.dp))
 
         var dim by remember(appearance.backgroundDim) {
             mutableFloatStateOf(appearance.backgroundDim)
