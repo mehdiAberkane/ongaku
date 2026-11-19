@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -1389,7 +1391,13 @@ private fun FullPlayer(
                         TrackMenuButton(trackId, actions, queueEntries = false)
                     }
                 }
-                Spacer(Modifier.weight(1f))
+                // Pochette au centre de l'espace libre ; rien quand le morceau n'en a pas.
+                Box(
+                    Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PlayerCover(metadata?.artworkUri)
+                }
                 Text(
                     metadata?.title?.toString().orEmpty(),
                     style = MaterialTheme.typography.titleLarge,
@@ -1403,6 +1411,15 @@ private fun FullPlayer(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                metadata?.albumTitle?.toString()?.takeIf { it.isNotBlank() }?.let { album ->
+                    Text(
+                        album,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
                 Slider(
                     value = sliderValue,
@@ -1612,6 +1629,34 @@ private fun QueueSheet(
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Annuler") } },
         )
     }
+}
+
+/**
+ * Pochette de l'écran de lecture, à la forme choisie dans l'apparence. Tant qu'elle n'est pas
+ * chargée, ou si le morceau n'en a pas, rien n'est dessiné : pas de carré vide devant l'image de fond.
+ */
+@Composable
+private fun PlayerCover(uri: Uri?) {
+    if (uri == null) return
+    var loaded by remember(uri) { mutableStateOf(false) }
+    val shape = when (LocalAppearance.current.coverShape) {
+        CoverShape.ROUNDED -> RoundedCornerShape(16.dp)
+        CoverShape.CIRCLE -> CircleShape
+        CoverShape.SQUARE -> RectangleShape
+    }
+    AsyncImage(
+        model = uri,
+        contentDescription = "Pochette",
+        contentScale = ContentScale.Crop,
+        onSuccess = { loaded = true },
+        onError = { loaded = false },
+        modifier = Modifier
+            .fillMaxWidth(0.85f)
+            .widthIn(max = 360.dp)
+            .aspectRatio(1f)
+            .graphicsLayer { alpha = if (loaded) 1f else 0f }
+            .clip(shape),
+    )
 }
 
 @Composable
