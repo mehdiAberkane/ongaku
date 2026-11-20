@@ -148,6 +148,7 @@ import fr.devsecopsforce.ongaku.data.TrackSort
 import fr.devsecopsforce.ongaku.data.albums
 import fr.devsecopsforce.ongaku.data.artists
 import fr.devsecopsforce.ongaku.data.letterPositions
+import fr.devsecopsforce.ongaku.data.missingTrackBackgrounds
 import fr.devsecopsforce.ongaku.data.rows
 import fr.devsecopsforce.ongaku.data.search
 import fr.devsecopsforce.ongaku.data.sortText
@@ -505,6 +506,9 @@ fun OngakuApp(
                         backgroundFile = appDataViewModel::backgroundFile,
                         onPick = pickImage,
                         onRemove = appDataViewModel::removeBackground,
+                        // Tous les morceaux : un morceau masqué par le filtre n'a pas disparu.
+                        missingTrackImages = data.missingTrackBackgrounds(existingIds).size,
+                        onRemoveMissing = { appDataViewModel.removeMissingBackgrounds(existingIds) },
                     )
                     else -> LibraryTabs(
                         tab = tab,
