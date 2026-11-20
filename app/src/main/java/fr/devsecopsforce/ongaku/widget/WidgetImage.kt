@@ -26,3 +26,23 @@ sealed interface WidgetImage {
             ).distinct()
     }
 }
+
+/**
+ * Garde la dernière image décodée : le widget se redessine à chaque pause, lecture ou changement de
+ * morceau, souvent avec la même image. Les noms des images de fond changent avec leur contenu.
+ */
+class WidgetImageCache<B : Any> {
+    private var last: Pair<WidgetImage, B>? = null
+
+    /** La première image de [candidates] qui se charge, sans redécoder la dernière affichée. */
+    @Synchronized
+    fun pick(candidates: List<WidgetImage>, load: (WidgetImage) -> B?): B? {
+        for (candidate in candidates) {
+            last?.takeIf { it.first == candidate }?.let { return it.second }
+            val image = load(candidate) ?: continue
+            last = candidate to image
+            return image
+        }
+        return null
+    }
+}

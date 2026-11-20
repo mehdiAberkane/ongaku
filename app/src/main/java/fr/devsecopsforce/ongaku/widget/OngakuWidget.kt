@@ -43,6 +43,7 @@ class OngakuSquareWidget : OngakuWidget()
 object WidgetDisplay {
     private const val PREFS = "ongaku_widget"
     private const val ARTWORK_SIZE_PX = 300
+    private val cache = WidgetImageCache<Bitmap>()
 
     private data class Format(
         val provider: Class<out OngakuWidget>,
@@ -78,8 +79,9 @@ object WidgetDisplay {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val data = synchronized(AppDataStore.lock) { AppDataStore(context).load() }
         val trackId = if (prefs.contains("track")) prefs.getLong("track", 0) else null
-        val image = WidgetImage.candidates(data, trackId, prefs.getString("artwork", null))
-            .firstNotNullOfOrNull { load(context, it) }
+        val image = cache.pick(WidgetImage.candidates(data, trackId, prefs.getString("artwork", null))) {
+            load(context, it)
+        }
         placed.forEach { (format, ids) ->
             manager.updateAppWidget(ids, buildViews(context, format, image))
         }

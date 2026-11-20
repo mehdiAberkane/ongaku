@@ -51,6 +51,9 @@ class CrossfadeController(
 
     /** Lecteur de relève, préparé sur le morceau suivant. */
     private var incoming: ExoPlayer? = null
+
+    /** Position dans la file du lecteur actif du morceau préparé par la relève. */
+    private var incomingIndex = C.INDEX_UNSET
     private var fading = false
     private var fadeStartMs = 0L
     private var fadeDurationMs = 0L
@@ -253,29 +256,45 @@ class CrossfadeController(
         }
     }
 
-    /** Prépare la relève sur le morceau suivant, avec la même file, au volume nul et à l'arrêt. */
-    @OptIn(UnstableApi::class)
+    /**
+     * Prépare la relève sur le seul morceau suivant, au volume nul et à l'arrêt. Le reste de la file
+     * ne lui est donné qu'au moment où elle prend la main ([completeQueue]) : une relève abandonnée
+     * (pause, saut, file modifiée) ne coûte pas une copie de toute la file.
+     */
     private fun prepareIncoming() {
         val nextIndex = player.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET) return
-        val items = List(player.mediaItemCount) { player.getMediaItemAt(it) }
-        val shuffleOrder = currentShuffleOrder()
+        incomingIndex = nextIndex
         incoming = createPlayer().apply {
             volume = 0f
-            setMediaItems(items, nextIndex, 0L)
-            repeatMode = player.repeatMode
-            // Même ordre aléatoire que le lecteur actif, pour que « suivant » reste le même.
-            if (shuffleOrder != null) setShuffleOrder(shuffleOrder)
-            shuffleModeEnabled = player.shuffleModeEnabled
+            setMediaItem(player.getMediaItemAt(nextIndex))
             playWhenReady = false
             addListener(incomingListener)
             prepare()
         }
     }
 
+    /**
+     * La relève reçoit la file complète autour du morceau qu'elle joue, avec le même ordre
+     * aléatoire et le même mode de répétition que le lecteur actif, pour que « suivant » reste le
+     * même. Ajouter avant et après le morceau en cours ne l'interrompt pas.
+     */
+    @OptIn(UnstableApi::class)
+    private fun completeQueue(next: ExoPlayer, old: ExoPlayer) {
+        val index = incomingIndex
+        val count = old.mediaItemCount
+        if (index !in 0 until count) return
+        val shuffleOrder = currentShuffleOrder(old)
+        if (index > 0) next.addMediaItems(0, List(index) { old.getMediaItemAt(it) })
+        if (index + 1 < count) next.addMediaItems(List(count - index - 1) { old.getMediaItemAt(index + 1 + it) })
+        if (shuffleOrder != null) next.setShuffleOrder(shuffleOrder)
+        next.shuffleModeEnabled = old.shuffleModeEnabled
+        next.repeatMode = old.repeatMode
+    }
+
     /** Ordre de lecture aléatoire du lecteur actif, relu morceau par morceau. */
     @OptIn(UnstableApi::class)
-    private fun currentShuffleOrder(): ShuffleOrder? {
+    private fun currentShuffleOrder(player: Player): ShuffleOrder? {
         val timeline = player.currentTimeline
         if (timeline.isEmpty) return null
         val order = ArrayList<Int>(timeline.windowCount)
@@ -330,6 +349,8 @@ class CrossfadeController(
         incoming = null
         next.removeListener(incomingListener)
 
+        // Avant d'écouter la relève : compléter sa file ne doit pas être pris pour un changement.
+        completeQueue(next, old)
         // Le temps écouté jusqu'ici revient au morceau qui se termine.
         stopListening()
         old.removeListener(this)

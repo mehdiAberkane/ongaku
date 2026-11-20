@@ -6,8 +6,10 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.content.edit
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import fr.devsecopsforce.ongaku.widget.WidgetDisplay
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,8 +61,13 @@ class PlaybackStateKeeper(
         prefs.edit { putInt(KEY_REPEAT, repeatMode) }
     }
 
+    // Seulement quand la file elle-même change : une durée découverte en cours de lecture change aussi
+    // la chronologie, et la file entière serait réécrite à chaque morceau.
+    override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+        if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) saveQueue()
+    }
+
     override fun onEvents(player: Player, events: Player.Events) {
-        if (events.contains(Player.EVENT_TIMELINE_CHANGED)) saveQueue()
         if (events.containsAny(
                 Player.EVENT_MEDIA_ITEM_TRANSITION,
                 Player.EVENT_IS_PLAYING_CHANGED,
@@ -115,7 +122,10 @@ class PlaybackStateKeeper(
             metadata.artworkUri,
             false,
         )
-        WidgetDisplay.render(context)
+        // Lecture du fichier des listes et décodage d'image : hors du fil principal. Pas dans [scope],
+        // que le service annule juste après.
+        val app = context.applicationContext
+        thread(name = "OngakuWidget") { WidgetDisplay.render(app) }
     }
 
     companion object {
