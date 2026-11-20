@@ -17,6 +17,7 @@ internal fun track(
     extension: String = "mp3",
     relativePath: String = "$folder/$title.$extension",
     sizeBytes: Long = 1_000L + id,
+    albumArtist: String = "",
 ) = Track(
     id = id,
     title = title,
@@ -33,6 +34,7 @@ internal fun track(
     uri = Uri.EMPTY,
     artworkUri = Uri.EMPTY,
     relativePath = relativePath,
+    albumArtist = albumArtist,
 )
 
 /** Le même fichier, auquel Android a donné un autre identifiant. */

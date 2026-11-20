@@ -28,18 +28,12 @@ data class Track(
     val artworkUri: Uri,
     /** Chemin du fichier depuis la racine du stockage : reconnaît le morceau si Android change son identifiant. */
     val relativePath: String = "",
-)
-
-/** Un album ou un artiste : un titre affiché et les morceaux qu'il regroupe. */
-data class TrackGroup(
-    val key: String,
-    val title: String,
-    val subtitle: String,
-    val artworkUri: Uri?,
-    val tracks: List<Track>,
-    /** Année la plus récente des morceaux d'un album ; null si aucune n'est renseignée. */
-    val year: Int? = null,
-)
+    /** Artiste de l'album (tag « album artist ») ; vide s'il n'est pas renseigné. */
+    val albumArtist: String = "",
+) {
+    /** Numéro de disque : MediaStore l'encode dans les milliers du numéro de piste ; 0 s'il manque. */
+    val discNumber: Int get() = trackNumber / 1000
+}
 
 fun Track.toMediaItem(): MediaItem = mediaItem(id, title, artist, album, artworkUri)
 
@@ -58,45 +52,6 @@ fun mediaItem(id: Long, title: String, artist: String, album: String, artworkUri
         )
         .build()
 
-private fun List<Track>.mainArtist(): String =
-    groupingBy { it.artist }.eachCount().maxBy { it.value }.key
-
-/**
- * Android crée un album par dossier : on regroupe d'abord par identifiant, pour qu'une compilation
- * reste entière, puis on fusionne à l'affichage ceux qui ont le même nom et le même artiste.
- */
-fun List<Track>.albums(): List<TrackGroup> = groupBy { it.albumId }
-    .values
-    .groupBy { tracks -> tracks.first().album.trim().lowercase() to tracks.mainArtist().lowercase() }
-    .map { (key, parts) ->
-        val sorted = parts.flatten()
-            .sortedWith(compareBy({ it.trackNumber }, { it.title.lowercase() }))
-        TrackGroup(
-            key = "album:${key.first}|${key.second}",
-            title = sorted.first().album,
-            subtitle = parts.first().mainArtist(),
-            artworkUri = sorted.first().artworkUri,
-            tracks = sorted,
-            year = sorted.maxOf { it.year }.takeIf { it > 0 },
-        )
-    }
-    .sortedBy { it.title.searchKey() }
-
-fun List<Track>.artists(): List<TrackGroup> = groupBy { it.artist }
-    .map { (artist, tracks) ->
-        val sorted = tracks.sortedWith(
-            compareBy({ it.album.lowercase() }, { it.trackNumber }, { it.title.lowercase() }),
-        )
-        TrackGroup(
-            key = "artist:$artist",
-            title = artist,
-            subtitle = "${tracks.size} titre${if (tracks.size > 1) "s" else ""}",
-            artworkUri = sorted.first().artworkUri,
-            tracks = sorted,
-        )
-    }
-    .sortedBy { it.title.searchKey() }
-
 class MusicRepository(private val context: Context) {
 
     suspend fun loadTracks(): List<Track> = withContext(Dispatchers.IO) {
@@ -112,6 +67,7 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.DATA,
+            ALBUM_ARTIST,
         )
         val tracks = mutableListOf<Track>()
         context.contentResolver.query(
@@ -133,6 +89,7 @@ class MusicRepository(private val context: Context) {
             val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
             val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val albumArtistColumn = cursor.getColumnIndex(ALBUM_ARTIST)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -143,7 +100,7 @@ class MusicRepository(private val context: Context) {
                     id = id,
                     title = cursor.getString(titleColumn) ?: "Sans titre",
                     artist = artist?.takeUnless { it == MediaStore.UNKNOWN_STRING }
-                        ?: "Artiste inconnu",
+                        ?: UNKNOWN_ARTIST,
                     album = cursor.getString(albumColumn) ?: "Album inconnu",
                     albumId = albumId,
                     // MediaStore encode le numéro de disque dans les milliers.
@@ -160,6 +117,11 @@ class MusicRepository(private val context: Context) {
                     ),
                     artworkUri = ContentUris.withAppendedId(ALBUM_ART_URI, albumId),
                     relativePath = path.removePrefix(INTERNAL_STORAGE_PREFIX),
+                    albumArtist = albumArtistColumn.takeIf { it >= 0 }
+                        ?.let(cursor::getString)
+                        ?.trim()
+                        ?.takeUnless { it == MediaStore.UNKNOWN_STRING }
+                        .orEmpty(),
                 )
             }
         }
@@ -170,6 +132,9 @@ class MusicRepository(private val context: Context) {
 
     private companion object {
         const val INTERNAL_STORAGE_PREFIX = "/storage/emulated/0/"
+
+        /** Colonne présente depuis longtemps, mais sa constante publique date d'Android 11. */
+        const val ALBUM_ARTIST = "album_artist"
         val ALBUM_ART_URI: Uri = "content://media/external/audio/albumart".toUri()
     }
 }

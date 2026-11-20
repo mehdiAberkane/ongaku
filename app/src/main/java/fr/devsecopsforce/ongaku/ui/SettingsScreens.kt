@@ -51,6 +51,8 @@ fun SettingsScreen(
     settings: PlaybackSettings,
     allTracks: List<Track>,
     visibleCount: Int,
+    mergeFeaturing: Boolean,
+    onMergeFeaturingChange: (Boolean) -> Unit,
     onExport: (Uri) -> Unit,
     onImport: (Uri) -> Unit,
 ) {
@@ -136,6 +138,18 @@ fun SettingsScreen(
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
+        SectionTitle("Artistes")
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Ranger « A feat. B » sous l'artiste A", Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = mergeFeaturing, onCheckedChange = onMergeFeaturingChange)
+        }
+        Hint("Les tags de tes fichiers ne sont pas modifiés.")
+
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(16.dp))
+
         LibraryFilterSection(allTracks, visibleCount)
 
         Spacer(Modifier.height(16.dp))
@@ -163,7 +177,7 @@ fun SettingsScreen(
 }
 
 @Composable
-fun StatsScreen(tracks: List<Track>, settings: PlaybackSettings) {
+fun StatsScreen(tracks: List<Track>, settings: PlaybackSettings, mergeFeaturing: Boolean) {
     val context = LocalContext.current
     var listenedMs by remember { mutableLongStateOf(settings.listenedMs) }
     LaunchedEffect(Unit) {
@@ -173,7 +187,7 @@ fun StatsScreen(tracks: List<Track>, settings: PlaybackSettings) {
         }
     }
     val albumCount = remember(tracks) { tracks.albums().size }
-    val artistCount = remember(tracks) { tracks.artists().size }
+    val artistCount = remember(tracks, mergeFeaturing) { tracks.artists(mergeFeaturing).size }
     val totalSize = remember(tracks) { tracks.sumOf { it.sizeBytes } }
     val totalDuration = remember(tracks) { tracks.sumOf { it.durationMs } }
 

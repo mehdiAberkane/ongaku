@@ -29,6 +29,11 @@ class PlaybackSettings(context: Context) {
         get() = prefs.getStringSet(KEY_BLUETOOTH_DEVICES, null).orEmpty().toSet()
         set(value) = prefs.edit { putStringSet(KEY_BLUETOOTH_DEVICES, value) }
 
+    /** Range « A feat. B » sous l'artiste A dans la liste des artistes. */
+    var mergeFeaturing: Boolean
+        get() = prefs.getBoolean(KEY_MERGE_FEATURING, true)
+        set(value) = prefs.edit { putBoolean(KEY_MERGE_FEATURING, value) }
+
     var listenedMs: Long
         get() = prefs.getLong(KEY_LISTENED, 0)
         set(value) = prefs.edit { putLong(KEY_LISTENED, value) }
@@ -41,5 +46,6 @@ class PlaybackSettings(context: Context) {
         private const val KEY_LOCK_SCREEN_PLAYER = "lock_screen_player"
         private const val KEY_BLUETOOTH_AUTOPLAY = "bluetooth_autoplay"
         private const val KEY_BLUETOOTH_DEVICES = "bluetooth_devices"
+        private const val KEY_MERGE_FEATURING = "merge_featuring"
     }
 }

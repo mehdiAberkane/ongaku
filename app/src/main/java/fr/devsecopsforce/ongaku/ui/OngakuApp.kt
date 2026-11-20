@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
@@ -132,6 +133,7 @@ import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
 import fr.devsecopsforce.ongaku.data.CoverShape
+import fr.devsecopsforce.ongaku.data.GroupRow
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
@@ -143,6 +145,7 @@ import fr.devsecopsforce.ongaku.data.TrackSort
 import fr.devsecopsforce.ongaku.data.albums
 import fr.devsecopsforce.ongaku.data.artists
 import fr.devsecopsforce.ongaku.data.letterPositions
+import fr.devsecopsforce.ongaku.data.rows
 import fr.devsecopsforce.ongaku.data.search
 import fr.devsecopsforce.ongaku.data.sortText
 import fr.devsecopsforce.ongaku.data.sorted
@@ -273,7 +276,8 @@ fun OngakuApp(
     }
     val albums = remember(library.tracks) { library.tracks.albums() }
     val sortedAlbums = remember(albums, albumSort) { albums.sorted(albumSort) }
-    val artists = remember(library.tracks) { library.tracks.artists() }
+    var mergeFeaturing by remember { mutableStateOf(settings.mergeFeaturing) }
+    val artists = remember(library.tracks, mergeFeaturing) { library.tracks.artists(mergeFeaturing) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val goBack: () -> Unit = { detail = (detail as? Detail.Group)?.from }
 
@@ -389,8 +393,8 @@ fun OngakuApp(
                     ) {
                         Button(onClick = libraryViewModel::load) { Text("Rechercher à nouveau") }
                     }
-                    currentDetail is Detail.Group -> TrackList(
-                        tracks = currentDetail.group.tracks,
+                    currentDetail is Detail.Group -> GroupTrackList(
+                        group = currentDetail.group,
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
@@ -470,11 +474,16 @@ fun OngakuApp(
                         settings = settings,
                         allTracks = library.allTracks,
                         visibleCount = library.tracks.size,
+                        mergeFeaturing = mergeFeaturing,
+                        onMergeFeaturingChange = {
+                            mergeFeaturing = it
+                            settings.mergeFeaturing = it
+                        },
                         // Tous les morceaux : un filtre ne doit pas vider la sauvegarde des listes.
                         onExport = { appDataViewModel.exportBackup(it, library.allTracks) },
                         onImport = { appDataViewModel.importBackup(it, library.allTracks) },
                     )
-                    currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings)
+                    currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
                     currentDetail == Detail.Appearance -> AppearanceScreen(
                         data = data,
                         backgroundFile = appDataViewModel::backgroundFile,
@@ -1070,6 +1079,62 @@ private fun TrackList(
                     onPlay(tracks, index)
                 }
             }
+        }
+    }
+}
+
+/** Page d'un album ou d'un artiste : morceaux rangés par album, puis par disque. */
+@Composable
+private fun GroupTrackList(
+    group: TrackGroup,
+    currentId: String?,
+    actions: TrackActions,
+    onPlay: (List<Track>, Int) -> Unit,
+) {
+    val rows = remember(group) { group.rows() }
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(rows, key = { it.key }) { row ->
+            when (row) {
+                is GroupRow.AlbumHeader -> AlbumHeaderRow(row)
+                is GroupRow.DiscHeader -> Text(
+                    "Disque ${row.disc}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+                )
+                is GroupRow.Song -> TrackRow(row.track, row.track.id.toString() == currentId, actions) {
+                    onPlay(group.tracks, row.index)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumHeaderRow(header: GroupRow.AlbumHeader) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Artwork(header.artworkUri, Modifier.size(64.dp), iconSize = 28.dp, icon = Icons.Rounded.Album)
+        Spacer(Modifier.size(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                header.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                listOfNotNull(
+                    header.year?.toString(),
+                    "${header.trackCount} titre${if (header.trackCount > 1) "s" else ""}",
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
