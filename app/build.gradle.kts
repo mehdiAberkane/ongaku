@@ -84,6 +84,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.androidx.exifinterface)
 
+    constraints {
+        // Media3 tire Guava 33.3.1, touchée par GHSA-xxph-c9ww-hj94 (désérialisation Java) : corrigée en 33.7.2.
+        implementation(libs.guava) { because("GHSA-xxph-c9ww-hj94") }
+    }
+
     testImplementation(libs.junit)
     // Classes Android (Uri, org.json, Context) dans les tests qui tournent sur l'ordinateur.
     testImplementation(libs.robolectric)
