@@ -283,19 +283,28 @@ fun OngakuApp(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val goBack: () -> Unit = { detail = (detail as? Detail.Group)?.from }
 
-    val actions = TrackActions(
-        data = data,
-        toggleFavorite = appDataViewModel::toggleFavorite,
-        addToPlaylist = { adding = listOf(it) },
-        pickBackground = { pickImage("track:$it") },
-        removeBackground = { appDataViewModel.removeBackground(BackgroundTarget.Track(it)) },
-        playNext = { id -> allTracksById[id]?.let { enqueue(listOf(it), true) } },
-        addToQueue = { id -> allTracksById[id]?.let { enqueue(listOf(it), false) } },
-    )
+    // Mémorisé : un objet neuf à chaque recomposition empêcherait Compose de sauter les lignes visibles.
+    val actions = remember(data, allTracksById) {
+        TrackActions(
+            data = data,
+            toggleFavorite = appDataViewModel::toggleFavorite,
+            addToPlaylist = { adding = listOf(it) },
+            pickBackground = { pickImage("track:$it") },
+            removeBackground = { appDataViewModel.removeBackground(BackgroundTarget.Track(it)) },
+            playNext = { id -> allTracksById[id]?.let { enqueue(listOf(it), true) } },
+            addToQueue = { id -> allTracksById[id]?.let { enqueue(listOf(it), false) } },
+        )
+    }
 
     val currentDetail = detail
     val currentPlaylist = (currentDetail as? Detail.PlaylistDetail)
         ?.let { open -> data.playlists.firstOrNull { it.id == open.id } }
+    val favoriteTracks = remember(library.tracks, data.favorites) {
+        library.tracks.filter { it.id in data.favorites }
+    }
+    val playlistTracks = remember(currentPlaylist, tracksById) {
+        currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get)
+    }
     val detailTitle = when (currentDetail) {
         is Detail.Group -> currentDetail.group.title
         Detail.Search -> "Rechercher"
@@ -332,8 +341,8 @@ fun OngakuApp(
                         // Album, artiste, favoris ou liste ouverts : tout ajouter à la file.
                         val detailTracks = when (currentDetail) {
                             is Detail.Group -> currentDetail.group.tracks
-                            Detail.Favorites -> library.tracks.filter { it.id in data.favorites }
-                            is Detail.PlaylistDetail -> currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get)
+                            Detail.Favorites -> favoriteTracks
+                            is Detail.PlaylistDetail -> playlistTracks
                             else -> emptyList()
                         }
                         if (detailTracks.isNotEmpty()) {
@@ -417,13 +426,12 @@ fun OngakuApp(
                         missing = data.favorites.count { it !in existingIds },
                         onRemove = { appDataViewModel.removeMissingFavorites(existingIds) },
                     ) {
-                        val favorites = library.tracks.filter { it.id in data.favorites }
                         Column(Modifier.fillMaxSize()) {
-                            if (favorites.isNotEmpty()) {
-                                PlayAllButtons { shuffled -> playerViewModel.playAll(favorites, shuffled) }
+                            if (favoriteTracks.isNotEmpty()) {
+                                PlayAllButtons { shuffled -> playerViewModel.playAll(favoriteTracks, shuffled) }
                             }
                             TrackList(
-                                tracks = favorites,
+                                tracks = favoriteTracks,
                                 currentId = currentId,
                                 actions = actions,
                                 onPlay = playerViewModel::play,
@@ -462,14 +470,16 @@ fun OngakuApp(
                         },
                     ) {
                         ReorderableTrackList(
-                            tracks = currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get),
+                            tracks = playlistTracks,
                             onReorder = { order -> appDataViewModel.reorderPlaylist(currentDetail.id, order) },
                             currentId = currentId,
-                            actions = actions.copy(
-                                removeFromPlaylist = { trackId ->
-                                    appDataViewModel.removeFromPlaylist(currentDetail.id, trackId)
-                                },
-                            ),
+                            actions = remember(actions, currentDetail.id) {
+                                actions.copy(
+                                    removeFromPlaylist = { trackId ->
+                                        appDataViewModel.removeFromPlaylist(currentDetail.id, trackId)
+                                    },
+                                )
+                            },
                             onPlay = playerViewModel::play,
                             emptyMessage = "Cette liste est vide. Ajoute des morceaux depuis leur menu.",
                         )
@@ -1524,10 +1534,6 @@ private fun FullPlayer(
 ) {
     val metadata = player.current?.mediaMetadata
     var queueOpen by remember { mutableStateOf(false) }
-    var dragging by remember { mutableStateOf(false) }
-    var dragValue by remember { mutableFloatStateOf(0f) }
-    val duration = player.durationMs.coerceAtLeast(1).toFloat()
-    val sliderValue = if (dragging) dragValue else player.positionMs.toFloat().coerceAtMost(duration)
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize()) {
@@ -1596,22 +1602,7 @@ private fun FullPlayer(
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                Slider(
-                    value = sliderValue,
-                    valueRange = 0f..duration,
-                    onValueChange = {
-                        dragging = true
-                        dragValue = it
-                    },
-                    onValueChangeFinished = {
-                        viewModel.seekTo(dragValue.toLong())
-                        dragging = false
-                    },
-                )
-                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                    Text(formatTime(sliderValue.toLong()), style = MaterialTheme.typography.bodySmall)
-                    Text(formatTime(player.durationMs), style = MaterialTheme.typography.bodySmall)
-                }
+                ProgressBar(viewModel)
                 Spacer(Modifier.height(8.dp))
                 Row(
                     Modifier.fillMaxWidth(),
@@ -1793,6 +1784,35 @@ private fun QueueSheet(
             },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Annuler") } },
         )
+    }
+}
+
+/**
+ * Barre de progression et temps écoulé. Seule à lire la position : elle est seule à se redessiner
+ * pendant la lecture.
+ */
+@Composable
+private fun ProgressBar(viewModel: PlayerViewModel) {
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableFloatStateOf(0f) }
+    val duration = progress.durationMs.coerceAtLeast(1).toFloat()
+    val sliderValue = if (dragging) dragValue else progress.positionMs.toFloat().coerceIn(0f, duration)
+    Slider(
+        value = sliderValue,
+        valueRange = 0f..duration,
+        onValueChange = {
+            dragging = true
+            dragValue = it
+        },
+        onValueChangeFinished = {
+            viewModel.seekTo(dragValue.toLong())
+            dragging = false
+        },
+    )
+    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+        Text(formatTime(sliderValue.toLong()), style = MaterialTheme.typography.bodySmall)
+        Text(formatTime(progress.durationMs), style = MaterialTheme.typography.bodySmall)
     }
 }
 
