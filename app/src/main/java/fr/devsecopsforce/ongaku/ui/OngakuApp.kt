@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
@@ -687,7 +689,7 @@ private fun playerBackgroundName(data: AppData, trackId: Long?): String? =
 fun LockScreenPlayer(
     playerViewModel: PlayerViewModel,
     appDataViewModel: AppDataViewModel,
-    onClose: () -> Unit,
+    onUnlock: () -> Unit,
 ) {
     val player by playerViewModel.state.collectAsStateWithLifecycle()
     val data by appDataViewModel.state.collectAsStateWithLifecycle()
@@ -699,7 +701,8 @@ fun LockScreenPlayer(
         trackId = trackId,
         actions = null,
         background = appDataViewModel.backgroundFile(playerBackgroundName(data, trackId)),
-        onClose = onClose,
+        onClose = onUnlock,
+        onLockScreen = true,
     )
 }
 
@@ -1531,6 +1534,8 @@ private fun FullPlayer(
     background: File?,
     onClose: () -> Unit,
     onAddQueueToPlaylist: ((trackIds: List<Long>) -> Unit)? = null,
+    /** Par-dessus le verrouillage : le bouton du haut ouvre le déverrouillage d'Android. */
+    onLockScreen: Boolean = false,
 ) {
     val metadata = player.current?.mediaMetadata
     var queueOpen by remember { mutableStateOf(false) }
@@ -1559,8 +1564,16 @@ private fun FullPlayer(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Rounded.KeyboardArrowDown, "Fermer")
+                    if (onLockScreen) {
+                        TextButton(onClick = onClose) {
+                            Icon(Icons.Rounded.LockOpen, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Déverrouiller")
+                        }
+                    } else {
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Rounded.KeyboardArrowDown, "Fermer")
+                        }
                     }
                     Spacer(Modifier.weight(1f))
                     if (trackId != null && actions != null) {
