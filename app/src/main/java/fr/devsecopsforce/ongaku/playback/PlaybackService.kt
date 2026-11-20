@@ -108,7 +108,10 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    /** Voir [SessionAccess] : les autres applications reçoivent null et ne peuvent pas se connecter. */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+        session.takeIf { SessionAccess.allowed(controllerInfo.packageName, packageName, controllerInfo.isTrusted) }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player
