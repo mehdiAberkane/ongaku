@@ -7,10 +7,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
+import fr.devsecopsforce.ongaku.data.BackgroundImage
+import fr.devsecopsforce.ongaku.data.ImportLimits
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistBackup
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
+import fr.devsecopsforce.ongaku.data.SafeFile
+import fr.devsecopsforce.ongaku.data.backgroundNames
+import fr.devsecopsforce.ongaku.data.missingTrackBackgrounds
+import fr.devsecopsforce.ongaku.data.orphanBackgroundFiles
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.widget.WidgetDisplay
 import java.io.File
@@ -55,6 +61,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
 
     private val loading = viewModelScope.launch(Dispatchers.IO) {
         synchronized(AppDataStore.lock) { reloadIfCorrected() }
+        deleteOrphanBackgrounds()
     }
 
     init {
@@ -195,8 +202,12 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
             val imported = try {
                 val input = getApplication<Application>().contentResolver.openInputStream(source)
                     ?: throw IOException("fichier illisible")
-                val text = input.use { String(it.readBytes(), Charsets.UTF_8) }
-                PlaylistBackup.parse(text, tracks)
+                val bytes = input.use { ImportLimits.readLimited(it, ImportLimits.MAX_BACKUP_BYTES) }
+                if (bytes == null) {
+                    toast("Fichier trop lourd pour une sauvegarde Ongaku (plus de 5 Mo).")
+                    return@launch
+                }
+                PlaylistBackup.parse(String(bytes, Charsets.UTF_8), tracks)
             } catch (e: JSONException) {
                 toast("Ce fichier n'est pas une sauvegarde Ongaku.")
                 return@launch
@@ -219,27 +230,61 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Le sélecteur ne donne qu'un accès temporaire à l'image : on en garde une copie privée. */
+    /**
+     * Le sélecteur ne donne qu'un accès temporaire à l'image : on en garde une copie privée. L'image
+     * est décodée (un fichier qui n'en est pas une est refusé), redressée et réduite à la taille de
+     * l'écran : une photo de 50 Mo ne s'installe pas telle quelle dans le stockage de l'application.
+     */
     fun setBackground(target: BackgroundTarget, source: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             val name = "${UUID.randomUUID()}.img"
-            val copied = try {
-                backgroundsDir.mkdirs()
-                val input = getApplication<Application>().contentResolver.openInputStream(source)
-                    ?: throw IOException("image illisible")
-                input.use { from ->
-                    File(backgroundsDir, name).outputStream().use { to -> from.copyTo(to) }
+            val saved = try {
+                val bytes = BackgroundImage.prepare(getApplication(), source)
+                if (bytes == null) {
+                    toast("Ce fichier n'est pas une image lisible.")
+                    false
+                } else {
+                    backgroundsDir.mkdirs()
+                    SafeFile.write(File(backgroundsDir, name), bytes)
+                    true
                 }
-                true
             } catch (e: IOException) {
                 toast("Impossible de copier cette image.")
                 false
             } catch (e: SecurityException) {
                 toast("Impossible de lire cette image.")
                 false
+            } catch (e: OutOfMemoryError) {
+                toast("Image trop grande.")
+                false
             }
-            if (copied) replaceBackground(target, name)
+            if (saved) replaceBackground(target, name)
         }
+    }
+
+    /** Retire les images des morceaux qui ne sont plus sur le téléphone, et leurs fichiers. */
+    fun removeMissingBackgrounds(existing: Set<Long>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var removed = emptyMap<Long, String>()
+            var stillUsed = emptySet<String>()
+            applyChange { data ->
+                removed = data.missingTrackBackgrounds(existing)
+                data.copy(trackBackgrounds = data.trackBackgrounds - removed.keys).also {
+                    stillUsed = it.backgroundNames()
+                }
+            }
+            removed.values.filterNot { it in stillUsed }.forEach { backgroundFile(it)?.delete() }
+            WidgetDisplay.render(getApplication())
+        }
+    }
+
+    /** Fichiers d'images que plus rien ne désigne : voir [orphanBackgroundFiles]. */
+    private fun deleteOrphanBackgrounds() {
+        val files = backgroundsDir.listFiles()?.map { it.name to it.lastModified() } ?: return
+        val orphans = synchronized(AppDataStore.lock) {
+            orphanBackgroundFiles(_state.value, files, System.currentTimeMillis(), ORPHAN_MIN_AGE_MS)
+        }
+        orphans.forEach { File(backgroundsDir, it).delete() }
     }
 
     fun removeBackground(target: BackgroundTarget) {
@@ -277,5 +322,10 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         backgroundFile(previous)?.delete()
         // Toutes ces images peuvent apparaître dans le widget : il se redessine aussitôt.
         WidgetDisplay.render(getApplication())
+    }
+
+    private companion object {
+        /** Une image en cours d'enregistrement n'est inscrite dans les données qu'à la fin. */
+        const val ORPHAN_MIN_AGE_MS = 60L * 60 * 1000
     }
 }

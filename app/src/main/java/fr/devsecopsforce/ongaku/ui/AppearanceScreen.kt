@@ -66,6 +66,9 @@ fun AppearanceScreen(
     backgroundFile: (String?) -> File?,
     onPick: (String) -> Unit,
     onRemove: (BackgroundTarget) -> Unit,
+    /** Images de morceaux qui ne sont plus sur le téléphone (gardées au cas où ils reviennent). */
+    missingTrackImages: Int = 0,
+    onRemoveMissing: () -> Unit = {},
 ) {
     val store = AppearanceStore.get(LocalContext.current)
     val appearance = LocalAppearance.current
@@ -90,6 +93,17 @@ fun AppearanceScreen(
             onRemove = { onRemove(BackgroundTarget.Player) },
         )
         Note("Pour une image propre à un morceau, ouvre le menu ⋮ de ce morceau.")
+        if (missingTrackImages > 0) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$missingTrackImages image${if (missingTrackImages > 1) "s" else ""} de morceaux " +
+                        "qui ne sont plus sur le téléphone",
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = onRemoveMissing) { Text("Supprimer") }
+            }
+        }
         Spacer(Modifier.height(12.dp))
         ImageRow(
             label = "Widget",
