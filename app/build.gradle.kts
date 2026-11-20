@@ -63,6 +63,11 @@ android {
     }
 }
 
+// Versions exactes des bibliothèques livrées dans l'application, notées dans app/gradle.lockfile :
+// une version qui change sans qu'on l'ait voulu fait échouer la compilation, et la CI y cherche les
+// vulnérabilités connues. Après un changement de dépendance : ./gradlew :app:dependencies --write-locks
+configurations.matching { it.name == "debugRuntimeClasspath" || it.name == "releaseRuntimeClasspath" }
+    .configureEach { resolutionStrategy.activateDependencyLocking() }
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -78,6 +83,11 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.coil.compose)
     implementation(libs.androidx.exifinterface)
+
+    constraints {
+        // Media3 tire Guava 33.3.1, touchée par GHSA-xxph-c9ww-hj94 (désérialisation Java) : corrigée en 33.7.2.
+        implementation(libs.guava) { because("GHSA-xxph-c9ww-hj94") }
+    }
 
     testImplementation(libs.junit)
     // Classes Android (Uri, org.json, Context) dans les tests qui tournent sur l'ordinateur.

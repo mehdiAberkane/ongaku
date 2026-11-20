@@ -53,6 +53,8 @@ Déplacer une carte : modifier `columnId`, `order` et `updatedAt` dans son fichi
 - Les API Media3 « instables » s'utilisent avec `@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)`, sinon le lint échoue.
 - CI : `.github/workflows/ci.yml` (GitHub Actions) sur chaque pull request et sur `main`. Ne fusionner une pull request que si la CI est verte. Les actions sont épinglées par empreinte de commit, sur des versions publiées depuis au moins deux semaines.
 - Avant de pousser, lancer la même commande en local.
+- **Dépendances vérifiées** : Gradle contrôle l'empreinte de chaque bibliothèque téléchargée (`gradle/verification-metadata.xml`) et les versions livrées dans l'application sont verrouillées (`app/gradle.lockfile`). Après un ajout ou une mise à jour de dépendance : `./gradlew :app:dependencies --write-locks`, puis `./gradlew --write-verification-metadata sha256 lintDebug testDebugUnitTest assembleDebug assembleRelease` **avec un cache Gradle vide** (`GRADLE_USER_HOME` pointant vers un dossier neuf, supprimé ensuite) : avec le cache habituel, des fichiers de métadonnées déjà résolus ne sont pas retéléchargés, manquent dans le fichier, et la CI échoue. Sous Windows, l'empreinte de `aapt2` pour Linux (utilisée par la CI) n'est pas générée : la reprendre sur le dépôt Maven de Google et l'ajouter à la main.
+- La CI cherche aussi les secrets dans tout l'historique (gitleaks) et les vulnérabilités connues des bibliothèques de `app/gradle.lockfile` (OSV-Scanner). Ces outils sont téléchargés depuis leurs publications officielles et vérifiés par empreinte.
 
 ## Tester sur le téléphone
 
