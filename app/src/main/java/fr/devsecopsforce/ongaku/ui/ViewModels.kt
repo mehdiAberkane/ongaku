@@ -31,6 +31,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -106,11 +109,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 }
 
+/**
+ * Tout l'état du lecteur sauf la position : il ne change qu'aux événements du lecteur, pas pendant
+ * la lecture. L'écran principal le lit et ne se recompose donc pas toutes les demi-secondes.
+ */
 data class PlayerState(
     val current: MediaItem? = null,
     val isPlaying: Boolean = false,
-    val positionMs: Long = 0,
-    val durationMs: Long = 0,
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queue: List<MediaItem> = emptyList(),
@@ -119,9 +124,15 @@ data class PlayerState(
     val playOrder: List<Int> = emptyList(),
 )
 
+/** Position dans le morceau en cours : à part, lue seulement par la barre de progression. */
+data class PlayerProgress(val positionMs: Long = 0, val durationMs: Long = 0)
+
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
+
+    private val _progress = MutableStateFlow(PlayerProgress())
+    val progress: StateFlow<PlayerProgress> = _progress.asStateFlow()
 
     private var controller: MediaController? = null
     private var restoreJob: Job? = null
@@ -148,19 +159,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             },
             ContextCompat.getMainExecutor(application),
         )
+        // Le minuteur ne tourne que si une barre de progression est affichée : elle cesse d'être
+        // lue quand l'écran passe en arrière-plan ou s'éteint.
         viewModelScope.launch {
-            while (isActive) {
-                delay(500)
-                controller?.takeIf { it.isPlaying }?.let { player ->
-                    _state.update { state ->
-                        state.copy(
-                            positionMs = player.currentPosition,
-                            durationMs = player.safeDuration(),
-                        )
+            _progress.subscriptionCount
+                .map { it > 0 }
+                .distinctUntilChanged()
+                .collectLatest { watched ->
+                    if (!watched) return@collectLatest
+                    controller?.let(::syncProgress)
+                    while (isActive) {
+                        delay(PROGRESS_EVERY_MS)
+                        controller?.takeIf { it.isPlaying }?.let(::syncProgress)
                     }
                 }
-            }
         }
+    }
+
+    private fun syncProgress(player: Player) {
+        _progress.value = PlayerProgress(player.currentPosition, player.safeDuration())
     }
 
     private fun Player.safeDuration(): Long =
@@ -170,14 +187,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = PlayerState(
             current = player.currentMediaItem,
             isPlaying = player.isPlaying,
-            positionMs = player.currentPosition,
-            durationMs = player.safeDuration(),
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
             queue = List(player.mediaItemCount) { player.getMediaItemAt(it) },
             currentIndex = player.currentMediaItemIndex,
             playOrder = player.playOrder(),
         )
+        syncProgress(player)
     }
 
     /** Remet la dernière lecture en place, en pause, pour que le mini-lecteur puisse la reprendre. */
@@ -287,7 +303,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs)
-        _state.update { it.copy(positionMs = positionMs) }
+        _progress.update { it.copy(positionMs = positionMs) }
     }
 
     fun playQueueItem(index: Int) {
@@ -315,5 +331,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         controller?.removeListener(listener)
         MediaController.releaseFuture(controllerFuture)
         controller = null
+    }
+
+    private companion object {
+        const val PROGRESS_EVERY_MS = 500L
     }
 }
