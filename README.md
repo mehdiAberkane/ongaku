@@ -16,7 +16,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
   les écouteurs sont débranchés, reprise de la dernière file au redémarrage.
 - **Lecture automatique en Bluetooth** : la musique reprend quand un appareil choisi se connecte.
 - **Écran de verrouillage** : écran de lecture affiché par-dessus le verrouillage, sans accès à la
-  bibliothèque ni aux réglages.
+  bibliothèque ni aux réglages. Son bouton « Déverrouiller » ouvre le déverrouillage d'Android
+  (sur certains téléphones, l'empreinte ne marche pas tant que cet écran est affiché).
 - **Widgets** : trois formats pour l'écran d'accueil (ligne, rectangle, carré).
 - **Apparence** : couleurs du système ou couleur personnalisée, noir pur pour écran OLED, images de
   fond (générale ou par morceau) avec flou et assombrissement, taille du texte, affichage compact.
@@ -91,7 +92,7 @@ vérification, avec la compilation des deux versions, tourne sur GitHub Actions 
 | Accès à la musique (`READ_MEDIA_AUDIO`, ou `READ_EXTERNAL_STORAGE` avant Android 13) | Lire les fichiers audio du téléphone. |
 | Service au premier plan, `WAKE_LOCK` | Continuer la lecture écran éteint. |
 | Appareils à proximité (`BLUETOOTH_CONNECT`) | Lecture automatique quand un appareil Bluetooth choisi se connecte. Facultative. |
-| Superposition (`SYSTEM_ALERT_WINDOW`) | Afficher l'écran de lecture sur le verrouillage. Facultative. |
+| Superposition (`SYSTEM_ALERT_WINDOW`) | Ouvrir l'écran de lecture sur le verrouillage depuis l'arrière-plan ; Ongaku ne dessine aucune superposition. Facultative, demandée seulement si l'option est activée. |
 
 ## Structure
 

@@ -21,16 +21,41 @@ import fr.devsecopsforce.ongaku.ui.PlayerViewModel
 /**
  * Écran affiché par-dessus le verrouillage. Il est volontairement distinct de MainActivity, et dans
  * sa propre tâche, pour que la bibliothèque et les réglages restent inaccessibles sans déverrouiller.
+ *
+ * Certains téléphones (OnePlus notamment) ne déverrouillent pas par empreinte tant qu'un écran est
+ * affiché par-dessus le verrouillage : le bouton « Déverrouiller » ouvre donc directement le
+ * déverrouillage d'Android, où l'empreinte et le code fonctionnent.
  */
 class LockScreenActivity : ComponentActivity() {
     private val playerViewModel: PlayerViewModel by viewModels()
     private val appDataViewModel: AppDataViewModel by viewModels()
 
+    private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
+
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val keyguard = getSystemService(KeyguardManager::class.java)
             if (intent.action == Intent.ACTION_USER_PRESENT || !keyguard.isKeyguardLocked) finish()
         }
+    }
+
+    /**
+     * Ouvre le déverrouillage d'Android ; l'écran se ferme une fois le téléphone déverrouillé. Si
+     * l'utilisateur renonce, l'écran de lecture reste affiché.
+     */
+    private fun unlock() {
+        if (!keyguard.isKeyguardLocked) {
+            finish()
+            return
+        }
+        keyguard.requestDismissKeyguard(
+            this,
+            object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() = finish()
+
+                // Android ne peut pas afficher le déverrouillage : on rend la main à l'écran de verrouillage.
+                override fun onDismissError() = finish()
+            },
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,7 +78,7 @@ class LockScreenActivity : ComponentActivity() {
         )
         setContent {
             OngakuTheme {
-                LockScreenPlayer(playerViewModel, appDataViewModel, onClose = ::finish)
+                LockScreenPlayer(playerViewModel, appDataViewModel, onUnlock = ::unlock)
             }
         }
     }
