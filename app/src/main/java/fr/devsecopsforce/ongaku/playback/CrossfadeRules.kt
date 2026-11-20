@@ -38,9 +38,7 @@ internal object CrossfadeRules {
         repeatOne: Boolean,
         incoming: Incoming,
     ): Watch {
-        val canFade = fadeMs > 0 && durationMs != null && durationMs >= fadeMs * 2 &&
-            isPlaying && hasNext && !repeatOne
-        if (!canFade) return Watch.CANCEL
+        if (!canFade(fadeMs, durationMs, isPlaying, hasNext, repeatOne) || durationMs == null) return Watch.CANCEL
 
         val remaining = durationMs - positionMs
         return when {
@@ -55,6 +53,39 @@ internal object CrossfadeRules {
             remaining <= fadeMs && incoming == Incoming.READY -> Watch.START
             else -> Watch.NOTHING
         }
+    }
+
+    private fun canFade(fadeMs: Long, durationMs: Long?, isPlaying: Boolean, hasNext: Boolean, repeatOne: Boolean) =
+        fadeMs > 0 && durationMs != null && durationMs >= fadeMs * 2 && isPlaying && hasNext && !repeatOne
+
+    /**
+     * Délai, en temps réel, avant le prochain relevé [watch] utile : celui où la relève doit se
+     * préparer, puis celui où le fondu doit démarrer. null : rien à attendre avant le prochain
+     * événement du lecteur (pause, saut, changement de morceau ou de file, relève prête…).
+     * À appeler juste après [watch] et l'application de sa décision, avec le nouvel état.
+     */
+    fun nextWatchDelay(
+        fadeMs: Long,
+        durationMs: Long?,
+        positionMs: Long,
+        isPlaying: Boolean,
+        hasNext: Boolean,
+        repeatOne: Boolean,
+        incoming: Incoming,
+        speed: Float = 1f,
+    ): Long? {
+        if (!canFade(fadeMs, durationMs, isPlaying, hasNext, repeatOne) || durationMs == null) return null
+        val remaining = durationMs - positionMs
+        val target = when (incoming) {
+            // Trop tard pour préparer : le morceau se termine sans fondu.
+            Incoming.NONE -> if (remaining <= fadeMs / 2) return null else fadeMs + PREPARE_LEAD_MS
+            // La relève prévient quand elle est prête.
+            Incoming.PREPARING -> return null
+            Incoming.READY -> fadeMs
+        }
+        val mediaMs = (remaining - target).coerceAtLeast(0)
+        // Arrondi au-dessus : un réveil en avance ne ferait qu'un relevé de plus.
+        return kotlin.math.ceil(mediaMs / speed.coerceAtLeast(0.1f).toDouble()).toLong()
     }
 
     /**
@@ -75,12 +106,13 @@ internal object CrossfadeRules {
     }
 
     /** Une écoute compte une fois par lecture : 30 s, ou la moitié d'un morceau plus court. */
-    fun shouldCountPlay(listenedMs: Long, durationMs: Long?): Boolean {
-        val threshold = if (durationMs == null) {
-            COUNT_PLAY_AFTER_MS
-        } else {
-            minOf(COUNT_PLAY_AFTER_MS, durationMs / 2)
-        }
-        return listenedMs >= threshold
-    }
+    fun shouldCountPlay(listenedMs: Long, durationMs: Long?): Boolean =
+        listenedMs >= countThreshold(durationMs)
+
+    /** Écoute qu'il reste avant que le morceau compte ; 0 s'il compte déjà. */
+    fun playCountDelay(listenedMs: Long, durationMs: Long?): Long =
+        (countThreshold(durationMs) - listenedMs).coerceAtLeast(0)
+
+    private fun countThreshold(durationMs: Long?): Long =
+        if (durationMs == null) COUNT_PLAY_AFTER_MS else minOf(COUNT_PLAY_AFTER_MS, durationMs / 2)
 }

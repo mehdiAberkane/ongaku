@@ -41,7 +41,7 @@ class PlaybackSettings(context: Context) {
     companion object {
         const val MAX_CROSSFADE_SECONDS = 12
         const val KEY_PAUSE_ON_NOISY = "pause_on_noisy"
-        private const val KEY_CROSSFADE = "crossfade_seconds"
+        const val KEY_CROSSFADE = "crossfade_seconds"
         private const val KEY_LISTENED = "listened_ms"
         private const val KEY_LOCK_SCREEN_PLAYER = "lock_screen_player"
         private const val KEY_BLUETOOTH_AUTOPLAY = "bluetooth_autoplay"
