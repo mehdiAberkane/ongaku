@@ -10,6 +10,7 @@ import fr.devsecopsforce.ongaku.data.AppDataStore
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistBackup
+import fr.devsecopsforce.ongaku.data.PlaylistEdits
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.widget.WidgetDisplay
 import java.io.File
@@ -115,18 +116,27 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun createPlaylist(name: String, firstTrackId: Long? = null) = mutate { data ->
-        data.copy(
-            playlists = data.playlists + Playlist(
-                id = UUID.randomUUID().toString(),
-                name = name.trim(),
-                trackIds = listOfNotNull(firstTrackId),
-            ),
-        )
+    /**
+     * Création ou renommage : refusé si une autre liste porte déjà ce nom (l'import fusionne les
+     * listes par nom). Vérifié ici aussi, l'écran pouvant afficher un état en retard.
+     */
+    private fun mutateNamed(name: String, exceptId: String?, transform: (AppData) -> AppData) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var taken = false
+            applyChange { data ->
+                if (PlaylistEdits.isNameTaken(data.playlists, name, exceptId)) {
+                    taken = true
+                    data
+                } else {
+                    transform(data)
+                }
+            }
+            if (taken) toast("Une liste « ${name.trim()} » existe déjà.")
+        }
     }
 
-    /** Nouvelle liste déjà remplie, par exemple depuis la file d'attente. */
-    fun createPlaylistWith(name: String, trackIds: List<Long>) = mutate { data ->
+    /** Nouvelle liste, vide ou déjà remplie (un morceau, un album, la file d'attente…). */
+    fun createPlaylist(name: String, trackIds: List<Long> = emptyList()) = mutateNamed(name, null) { data ->
         data.copy(
             playlists = data.playlists + Playlist(
                 id = UUID.randomUUID().toString(),
@@ -136,18 +146,22 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun renamePlaylist(id: String, name: String) = updatePlaylist(id) { it.copy(name = name.trim()) }
+    fun renamePlaylist(id: String, name: String) = mutateNamed(name, id) { data ->
+        data.copy(playlists = data.playlists.map { if (it.id == id) it.copy(name = name.trim()) else it })
+    }
 
     fun deletePlaylist(id: String) = mutate { data ->
         data.copy(playlists = data.playlists.filterNot { it.id == id })
     }
 
-    fun addToPlaylist(id: String, trackId: Long) = updatePlaylist(id) { playlist ->
-        if (trackId in playlist.trackIds) {
-            playlist
-        } else {
-            playlist.copy(trackIds = playlist.trackIds + trackId)
-        }
+    /** Ajoute à la fin de la liste les morceaux qui n'y sont pas encore. */
+    fun addToPlaylist(id: String, trackIds: List<Long>) = updatePlaylist(id) { playlist ->
+        playlist.copy(trackIds = PlaylistEdits.append(playlist.trackIds, trackIds))
+    }
+
+    /** [visibleOrder] : nouvel ordre des morceaux affichés ; les morceaux masqués ne bougent pas. */
+    fun reorderPlaylist(id: String, visibleOrder: List<Long>) = updatePlaylist(id) { playlist ->
+        playlist.copy(trackIds = PlaylistEdits.reorderVisible(playlist.trackIds, visibleOrder))
     }
 
     fun removeFromPlaylist(id: String, trackId: Long) = updatePlaylist(id) { playlist ->

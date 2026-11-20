@@ -139,6 +139,7 @@ import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.data.Playlist
+import fr.devsecopsforce.ongaku.data.PlaylistEdits
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackGroup
 import fr.devsecopsforce.ongaku.data.TrackSort
@@ -226,7 +227,8 @@ fun OngakuApp(
     val startTab = LocalAppearance.current.startTab
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
-    var addingTrackId by remember { mutableStateOf<Long?>(null) }
+    // Morceaux à ajouter à une liste : un seul, un album, un artiste, la file…
+    var adding by remember { mutableStateOf<List<Long>?>(null) }
     var creatingPlaylist by remember { mutableStateOf(false) }
     var renamingPlaylist by remember { mutableStateOf<Playlist?>(null) }
     var deletingPlaylist by remember { mutableStateOf<Playlist?>(null) }
@@ -284,7 +286,7 @@ fun OngakuApp(
     val actions = TrackActions(
         data = data,
         toggleFavorite = appDataViewModel::toggleFavorite,
-        addToPlaylist = { addingTrackId = it },
+        addToPlaylist = { adding = listOf(it) },
         pickBackground = { pickImage("track:$it") },
         removeBackground = { appDataViewModel.removeBackground(BackgroundTarget.Track(it)) },
         playNext = { id -> allTracksById[id]?.let { enqueue(listOf(it), true) } },
@@ -338,6 +340,7 @@ fun OngakuApp(
                             QueueMenuButton(
                                 onPlayNext = { enqueue(detailTracks, true) },
                                 onAddToQueue = { enqueue(detailTracks, false) },
+                                onAddToPlaylist = { adding = detailTracks.map { it.id } },
                             )
                         }
                         if (currentPlaylist != null) {
@@ -458,8 +461,9 @@ fun OngakuApp(
                             appDataViewModel.removeMissingFromPlaylist(currentDetail.id, existingIds)
                         },
                     ) {
-                        TrackList(
+                        ReorderableTrackList(
                             tracks = currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get),
+                            onReorder = { order -> appDataViewModel.reorderPlaylist(currentDetail.id, order) },
                             currentId = currentId,
                             actions = actions.copy(
                                 removeFromPlaylist = { trackId ->
@@ -537,26 +541,31 @@ fun OngakuApp(
                 actions = actions,
                 background = appDataViewModel.backgroundFile(playerBackgroundName(data, trackId)),
                 onClose = { playerOpen = false },
-                onSaveQueue = { name, ids ->
-                    appDataViewModel.createPlaylistWith(name, ids)
-                    Toast.makeText(context, "Liste « ${name.trim()} » créée", Toast.LENGTH_SHORT).show()
-                },
+                onAddQueueToPlaylist = { ids -> adding = ids },
             )
         }
     }
 
-    addingTrackId?.let { trackId ->
+    adding?.let { trackIds ->
         AddToPlaylistDialog(
             playlists = data.playlists,
-            onSelect = {
-                appDataViewModel.addToPlaylist(it.id, trackId)
-                addingTrackId = null
+            trackCount = trackIds.size,
+            onSelect = { playlist ->
+                val added = trackIds.distinct().count { it !in playlist.trackIds }
+                appDataViewModel.addToPlaylist(playlist.id, trackIds)
+                adding = null
+                val message = when {
+                    added == 0 -> "Déjà dans « ${playlist.name} »"
+                    trackIds.size > 1 -> "${countLabel(added)} ajouté${if (added > 1) "s" else ""} à « ${playlist.name} »"
+                    else -> null
+                }
+                message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
             },
             onCreate = { name ->
-                appDataViewModel.createPlaylist(name, trackId)
-                addingTrackId = null
+                appDataViewModel.createPlaylist(name, trackIds)
+                adding = null
             },
-            onDismiss = { addingTrackId = null },
+            onDismiss = { adding = null },
         )
     }
 
@@ -564,6 +573,7 @@ fun OngakuApp(
         NameDialog(
             title = "Nouvelle liste",
             initial = "",
+            taken = { PlaylistEdits.isNameTaken(data.playlists, it) },
             onConfirm = {
                 appDataViewModel.createPlaylist(it)
                 creatingPlaylist = false
@@ -576,6 +586,7 @@ fun OngakuApp(
         NameDialog(
             title = "Renommer la liste",
             initial = playlist.name,
+            taken = { PlaylistEdits.isNameTaken(data.playlists, it, exceptId = playlist.id) },
             onConfirm = {
                 appDataViewModel.renamePlaylist(playlist.id, it)
                 renamingPlaylist = null
@@ -1083,6 +1094,100 @@ private fun TrackList(
     }
 }
 
+/** Morceaux d'une liste : la poignée à droite de chaque ligne se fait glisser pour la déplacer. */
+@Composable
+private fun ReorderableTrackList(
+    tracks: List<Track>,
+    currentId: String?,
+    actions: TrackActions,
+    onPlay: (List<Track>, Int) -> Unit,
+    onReorder: (List<Long>) -> Unit,
+    emptyMessage: String,
+) {
+    if (tracks.isEmpty()) {
+        CenteredMessage(emptyMessage)
+        return
+    }
+    // Ordre affiché après un glissement, le temps que la liste enregistrée suive.
+    var pendingOrder by remember { mutableStateOf<List<Track>?>(null) }
+    LaunchedEffect(tracks) { pendingOrder = null }
+    var dragged by remember { mutableStateOf<Int?>(null) } // position de départ
+    var target by remember { mutableIntStateOf(0) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableIntStateOf(1) }
+
+    val base = pendingOrder ?: tracks
+    val shown = dragged?.let { PlaylistEdits.move(base, it, target) } ?: base
+    LazyColumn(Modifier.fillMaxSize()) {
+        itemsIndexed(shown, key = { _, track -> track.id }) { position, track ->
+            val isDragged = dragged?.let { from -> position == target && base.getOrNull(from) == track } == true
+            val currentPos by rememberUpdatedState(position)
+            Box(
+                Modifier
+                    .onSizeChanged { rowHeight = it.height.coerceAtLeast(1) }
+                    .zIndex(if (isDragged) 1f else 0f)
+                    .graphicsLayer {
+                        // Lu au dessin, parfois après le relâchement : le glissement peut déjà être fini.
+                        val from = dragged
+                        if (isDragged && from != null) {
+                            translationY = offset - (target - from) * rowHeight
+                            shadowElevation = 8f
+                        }
+                    }
+                    .background(if (isDragged) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent),
+            ) {
+                ListRow(
+                    title = track.title,
+                    subtitle = listOf(track.artist, formatTime(track.durationMs)).joinToString(" · "),
+                    artworkUri = track.artworkUri,
+                    highlighted = track.id.toString() == currentId,
+                    onClick = { onPlay(base, base.indexOf(track).coerceAtLeast(0)) },
+                    trailing = {
+                        FavoriteButton(track.id, actions)
+                        TrackMenuButton(track.id, actions)
+                        Icon(
+                            Icons.Rounded.DragHandle,
+                            "Déplacer",
+                            modifier = Modifier
+                                .padding(start = 4.dp, end = 12.dp)
+                                .pointerInput(track.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            dragged = currentPos
+                                            target = currentPos
+                                            offset = 0f
+                                        },
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            val from = dragged ?: return@detectDragGestures
+                                            offset += amount.y
+                                            target = (from + (offset / rowHeight).roundToInt())
+                                                .coerceIn(0, base.lastIndex)
+                                        },
+                                        onDragEnd = {
+                                            val from = dragged
+                                            if (from != null && from != target) {
+                                                val moved = PlaylistEdits.move(base, from, target)
+                                                pendingOrder = moved
+                                                onReorder(moved.map { it.id })
+                                            }
+                                            dragged = null
+                                            offset = 0f
+                                        },
+                                        onDragCancel = {
+                                            dragged = null
+                                            offset = 0f
+                                        },
+                                    )
+                                },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
 /** Page d'un album ou d'un artiste : morceaux rangés par album, puis par disque. */
 @Composable
 private fun GroupTrackList(
@@ -1179,7 +1284,7 @@ private fun FavoriteButton(trackId: Long, actions: TrackActions) {
 
 /** Menu d'un album, d'un artiste ou d'une liste ouverts. */
 @Composable
-private fun QueueMenuButton(onPlayNext: () -> Unit, onAddToQueue: () -> Unit) {
+private fun QueueMenuButton(onPlayNext: () -> Unit, onAddToQueue: () -> Unit, onAddToPlaylist: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
@@ -1193,6 +1298,10 @@ private fun QueueMenuButton(onPlayNext: () -> Unit, onAddToQueue: () -> Unit) {
             MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
                 open = false
                 onAddToQueue()
+            }
+            MenuEntry("Ajouter à une liste", Icons.AutoMirrored.Rounded.PlaylistAdd) {
+                open = false
+                onAddToPlaylist()
             }
         }
     }
@@ -1411,7 +1520,7 @@ private fun FullPlayer(
     actions: TrackActions?,
     background: File?,
     onClose: () -> Unit,
-    onSaveQueue: ((name: String, trackIds: List<Long>) -> Unit)? = null,
+    onAddQueueToPlaylist: ((trackIds: List<Long>) -> Unit)? = null,
 ) {
     val metadata = player.current?.mediaMetadata
     var queueOpen by remember { mutableStateOf(false) }
@@ -1544,7 +1653,7 @@ private fun FullPlayer(
     }
 
     if (queueOpen) {
-        QueueSheet(player, viewModel, onSaveQueue, onDismiss = { queueOpen = false })
+        QueueSheet(player, viewModel, onAddQueueToPlaylist, onDismiss = { queueOpen = false })
     }
 }
 
@@ -1556,7 +1665,7 @@ private fun FullPlayer(
 private fun QueueSheet(
     player: PlayerState,
     viewModel: PlayerViewModel,
-    onSaveQueue: ((name: String, trackIds: List<Long>) -> Unit)?,
+    onAddToPlaylist: ((trackIds: List<Long>) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val order = player.playOrder.takeIf { it.size == player.queue.size } ?: player.queue.indices.toList()
@@ -1567,7 +1676,6 @@ private fun QueueSheet(
     var target by remember { mutableIntStateOf(0) }
     var offset by remember { mutableFloatStateOf(0f) }
     var rowHeight by remember { mutableIntStateOf(1) }
-    var saving by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
 
     val base = pendingOrder ?: order
@@ -1587,8 +1695,10 @@ private fun QueueSheet(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
-            if (onSaveQueue != null) {
-                TextButton(onClick = { saving = true }) { Text("Enregistrer") }
+            if (onAddToPlaylist != null) {
+                TextButton(
+                    onClick = { onAddToPlaylist(base.mapNotNull { player.queue.getOrNull(it)?.mediaId?.toLongOrNull() }) },
+                ) { Text("Enregistrer") }
             }
             TextButton(onClick = { confirmClear = true }, enabled = player.queue.size > 1) { Text("Vider") }
         }
@@ -1667,17 +1777,6 @@ private fun QueueSheet(
         }
     }
 
-    if (saving && onSaveQueue != null) {
-        NameDialog(
-            title = "Enregistrer la file comme liste",
-            initial = "",
-            onConfirm = { name ->
-                onSaveQueue(name, base.mapNotNull { player.queue.getOrNull(it)?.mediaId?.toLongOrNull() })
-                saving = false
-            },
-            onDismiss = { saving = false },
-        )
-    }
 
     if (confirmClear) {
         AlertDialog(
@@ -1748,18 +1847,25 @@ private fun ToggleButton(
 @Composable
 private fun AddToPlaylistDialog(
     playlists: List<Playlist>,
+    trackCount: Int,
     onSelect: (Playlist) -> Unit,
     onCreate: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var creating by remember { mutableStateOf(playlists.isEmpty()) }
     if (creating) {
-        NameDialog("Nouvelle liste", "", onCreate, onDismiss)
+        NameDialog(
+            title = "Nouvelle liste",
+            initial = "",
+            taken = { PlaylistEdits.isNameTaken(playlists, it) },
+            onConfirm = onCreate,
+            onDismiss = onDismiss,
+        )
         return
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ajouter à une liste") },
+        title = { Text(if (trackCount > 1) "Ajouter ${countLabel(trackCount)} à une liste" else "Ajouter à une liste") },
         text = {
             LazyColumn {
                 items(playlists, key = { it.id }) { playlist ->
@@ -1784,10 +1890,13 @@ private fun AddToPlaylistDialog(
 private fun NameDialog(
     title: String,
     initial: String,
+    /** Le nom est déjà celui d'une autre liste : l'import fusionne les listes par nom. */
+    taken: (String) -> Boolean,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(initial) }
+    val duplicate = name.isNotBlank() && taken(name)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -1797,10 +1906,16 @@ private fun NameDialog(
                 onValueChange = { name = it },
                 singleLine = true,
                 label = { Text("Nom") },
+                isError = duplicate,
+                supportingText = if (duplicate) {
+                    { Text("Une liste porte déjà ce nom.") }
+                } else {
+                    null
+                },
             )
         },
         confirmButton = {
-            TextButton(enabled = name.isNotBlank(), onClick = { onConfirm(name) }) {
+            TextButton(enabled = name.isNotBlank() && !duplicate, onClick = { onConfirm(name) }) {
                 Text("Valider")
             }
         },
