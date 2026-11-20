@@ -403,7 +403,7 @@ fun OngakuApp(
                             "Aucun morceau ne correspond à tes filtres. Modifie-les dans les réglages."
                         },
                     ) {
-                        Button(onClick = libraryViewModel::load) { Text("Rechercher à nouveau") }
+                        Button(onClick = libraryViewModel::refresh) { Text("Rechercher à nouveau") }
                     }
                     currentDetail is Detail.Group -> GroupTrackList(
                         group = currentDetail.group,

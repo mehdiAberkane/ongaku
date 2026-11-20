@@ -15,11 +15,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import fr.devsecopsforce.ongaku.data.LibraryFilterStore
-import fr.devsecopsforce.ongaku.data.MusicRepository
+import fr.devsecopsforce.ongaku.data.LibraryCache
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.toMediaItem
 import fr.devsecopsforce.ongaku.playback.PlaybackService
@@ -49,7 +50,6 @@ data class LibraryState(
 )
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = MusicRepository(application)
     private val filterStore = LibraryFilterStore.get(application)
     private val _state = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = _state.asStateFlow()
@@ -93,11 +93,17 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
-                _state.value = loadedState(repository.loadTracks())
+                _state.value = loadedState(LibraryCache.tracks(getApplication()))
             } catch (e: SecurityException) {
                 _state.value = LibraryState(error = "Accès à la musique refusé.")
             }
         }
+    }
+
+    /** « Rechercher à nouveau » : relit MediaStore même si rien n'a été signalé. */
+    fun refresh() {
+        LibraryCache.invalidate()
+        load()
     }
 
     override fun onCleared() {
@@ -142,8 +148,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             SessionToken(application, ComponentName(application, PlaybackService::class.java)),
         ).buildAsync()
 
+    /** La liste de la file a changé depuis la dernière copie (ajout, retrait, déplacement…). */
+    private var queueChanged = true
+
     private val listener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) = syncState(player)
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            // Une durée découverte en cours de lecture change aussi la chronologie, pas la file.
+            if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) queueChanged = true
+        }
+
+        override fun onEvents(player: Player, events: Player.Events) =
+            syncState(player, orderChanged = events.contains(Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED))
     }
 
     init {
@@ -183,15 +198,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun Player.safeDuration(): Long =
         duration.takeUnless { it == C.TIME_UNSET }?.coerceAtLeast(0) ?: 0
 
-    private fun syncState(player: Player) {
+    /**
+     * Copie l'état du lecteur. La file (des milliers de morceaux après « Lire » sur toute la
+     * bibliothèque) n'est recopiée que si elle a changé, et son ordre que s'il a pu changer.
+     */
+    private fun syncState(player: Player, orderChanged: Boolean = false) {
+        val previous = _state.value
+        val rebuildQueue = queueChanged || previous.queue.size != player.mediaItemCount
+        queueChanged = false
         _state.value = PlayerState(
             current = player.currentMediaItem,
             isPlaying = player.isPlaying,
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
-            queue = List(player.mediaItemCount) { player.getMediaItemAt(it) },
+            queue = if (rebuildQueue) List(player.mediaItemCount) { player.getMediaItemAt(it) } else previous.queue,
             currentIndex = player.currentMediaItemIndex,
-            playOrder = player.playOrder(),
+            playOrder = if (rebuildQueue || orderChanged) player.playOrder() else previous.playOrder,
         )
         syncProgress(player)
     }

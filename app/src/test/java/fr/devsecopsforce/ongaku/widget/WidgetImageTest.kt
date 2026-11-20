@@ -43,4 +43,37 @@ class WidgetImageTest {
     fun `rien de choisi et pas de pochette, aucune image`() {
         assertEquals(emptyList<WidgetImage>(), WidgetImage.candidates(AppData(), trackId = null, artworkUri = null))
     }
+
+    @Test
+    fun `la dernière image n'est pas redécodée`() {
+        val cache = WidgetImageCache<String>()
+        val decoded = mutableListOf<WidgetImage>()
+        val load = { image: WidgetImage -> decoded += image; image.toString() }
+        val cover = WidgetImage.Artwork("content://pochette/1")
+
+        cache.pick(listOf(cover), load)
+        cache.pick(listOf(cover), load)
+
+        assertEquals(listOf<WidgetImage>(cover), decoded)
+    }
+
+    @Test
+    fun `une image prioritaire passe devant celle gardée`() {
+        val cache = WidgetImageCache<String>()
+        val cover = WidgetImage.Artwork("content://pochette/1")
+        val chosen = WidgetImage.Background("widget.img")
+        cache.pick(listOf(cover)) { "pochette" }
+
+        assertEquals("widget", cache.pick(listOf(chosen, cover)) { if (it == chosen) "widget" else "pochette" })
+    }
+
+    @Test
+    fun `une image illisible laisse passer la suivante`() {
+        val cache = WidgetImageCache<String>()
+        val missing = WidgetImage.Background("effacee.img")
+        val cover = WidgetImage.Artwork("content://pochette/1")
+
+        assertEquals("pochette", cache.pick(listOf(missing, cover)) { if (it == missing) null else "pochette" })
+        assertEquals(null, cache.pick(listOf(missing)) { null })
+    }
 }

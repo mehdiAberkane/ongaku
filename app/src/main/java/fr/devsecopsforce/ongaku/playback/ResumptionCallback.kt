@@ -15,7 +15,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import fr.devsecopsforce.ongaku.data.LibraryFilterStore
-import fr.devsecopsforce.ongaku.data.MusicRepository
+import fr.devsecopsforce.ongaku.data.LibraryCache
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.toMediaItem
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 /** File à rejouer quand le lecteur démarre sans rien à lire. */
 object ResumeQueue {
     suspend fun load(context: Context): MediaSession.MediaItemsWithStartPosition {
-        val library = MusicRepository(context).loadTracks()
+        val library = LibraryCache.tracks(context)
         // Rien à reprendre : on lance la bibliothèque, telle que filtrée dans les réglages.
         val tracks = savedTracks(context, library)
             .ifEmpty { library.filter(LibraryFilterStore.get(context).state.value::matches) }
@@ -34,7 +34,7 @@ object ResumeQueue {
 
     /** Dernière file enregistrée, ou null si aucune lecture n'a encore eu lieu. */
     suspend fun loadSaved(context: Context): MediaSession.MediaItemsWithStartPosition? {
-        val tracks = savedTracks(context, MusicRepository(context).loadTracks())
+        val tracks = savedTracks(context, LibraryCache.tracks(context))
         return if (tracks.isEmpty()) null else positioned(context, tracks)
     }
 
