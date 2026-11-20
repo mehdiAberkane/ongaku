@@ -63,6 +63,11 @@ android {
     }
 }
 
+// Versions exactes des bibliothèques livrées dans l'application, notées dans app/gradle.lockfile :
+// une version qui change sans qu'on l'ait voulu fait échouer la compilation, et la CI y cherche les
+// vulnérabilités connues. Après un changement de dépendance : ./gradlew :app:dependencies --write-locks
+configurations.matching { it.name == "debugRuntimeClasspath" || it.name == "releaseRuntimeClasspath" }
+    .configureEach { resolutionStrategy.activateDependencyLocking() }
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
