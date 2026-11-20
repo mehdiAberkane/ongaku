@@ -106,6 +106,75 @@ class CrossfadeRulesTest {
         assertEquals(Fade.Cancel, CrossfadeRules.fade(remainingMs = fade + 1_001, fadeDurationMs = fade, elapsedMs = 500))
     }
 
+    private fun delay(
+        remainingMs: Long,
+        incoming: Incoming = Incoming.NONE,
+        fadeMs: Long = fade,
+        durationMs: Long? = duration,
+        isPlaying: Boolean = true,
+        hasNext: Boolean = true,
+        repeatOne: Boolean = false,
+        speed: Float = 1f,
+    ) = CrossfadeRules.nextWatchDelay(
+        fadeMs = fadeMs,
+        durationMs = durationMs,
+        positionMs = (durationMs ?: duration) - remainingMs,
+        isPlaying = isPlaying,
+        hasNext = hasNext,
+        repeatOne = repeatOne,
+        incoming = incoming,
+        speed = speed,
+    )
+
+    @Test
+    fun `un seul réveil, juste avant la zone de préparation`() {
+        // 120 s avant la fin : réveil quand il restera fondu + 3 s.
+        assertEquals(120_000L - fade - 3_000, delay(120_000))
+        // Le relevé de ce moment-là décide de préparer.
+        assertEquals(Watch.PREPARE, watch(fade + 3_000))
+    }
+
+    @Test
+    fun `puis un réveil au début du fondu, une fois la relève prête`() {
+        assertEquals(null, delay(fade + 2_000, Incoming.PREPARING))
+        assertEquals(2_000L, delay(fade + 2_000, Incoming.READY))
+        assertEquals(Watch.START, watch(fade, Incoming.READY))
+    }
+
+    @Test
+    fun `aucun réveil quand le fondu est impossible`() {
+        assertEquals(null, delay(60_000, fadeMs = 0))
+        assertEquals(null, delay(60_000, durationMs = null))
+        assertEquals(null, delay(60_000, isPlaying = false))
+        assertEquals(null, delay(60_000, hasNext = false))
+        assertEquals(null, delay(60_000, repeatOne = true))
+        // Trop tard pour préparer : le morceau finit sans fondu, rien à surveiller.
+        assertEquals(null, delay(fade / 2))
+    }
+
+    @Test
+    fun `le réveil suit la vitesse de lecture`() {
+        assertEquals(50_000L, delay(100_000 + fade + 3_000, speed = 2f))
+    }
+
+    @Test
+    fun `un réveil n'est jamais négatif ni ne boucle sur un relevé inutile`() {
+        // Dans la zone de préparation sans relève : réveil immédiat, et ce relevé prépare.
+        assertEquals(0L, delay(fade + 1_000))
+        assertEquals(Watch.PREPARE, watch(fade + 1_000))
+        // Relève prête et fondu dû : réveil immédiat, et ce relevé démarre le fondu.
+        assertEquals(0L, delay(fade - 500, Incoming.READY))
+        assertEquals(Watch.START, watch(fade - 500, Incoming.READY))
+    }
+
+    @Test
+    fun `le réveil du compteur d'écoutes tombe au seuil`() {
+        assertEquals(30_000L, CrossfadeRules.playCountDelay(listenedMs = 0, durationMs = 200_000))
+        assertEquals(5_000L, CrossfadeRules.playCountDelay(listenedMs = 15_000, durationMs = 40_000))
+        assertEquals(0L, CrossfadeRules.playCountDelay(listenedMs = 45_000, durationMs = 200_000))
+        assertEquals(30_000L, CrossfadeRules.playCountDelay(listenedMs = 0, durationMs = null))
+    }
+
     @Test
     fun `une écoute compte après 30 secondes, ou la moitié d'un morceau court`() {
         assertFalse(CrossfadeRules.shouldCountPlay(listenedMs = 29_999, durationMs = 200_000))

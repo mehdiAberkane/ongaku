@@ -36,6 +36,7 @@ class PlaybackService : MediaSessionService() {
                 (session?.player as? ExoPlayer)
                     ?.setHandleAudioBecomingNoisy(settings.pauseOnNoisy)
             }
+            if (key == PlaybackSettings.KEY_CROSSFADE) crossfade?.onSettingsChanged()
         }
 
     private val screenOffReceiver = object : BroadcastReceiver() {
