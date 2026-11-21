@@ -15,12 +15,21 @@ data class LibraryFilter(
     val watchAllFolders: Boolean = true,
     val watchedFolders: Set<String> = emptySet(),
 ) {
+    /** Faux pour un minimum supérieur au maximum : ces bornes ne sont alors pas appliquées. */
+    val durationValid: Boolean get() = isValidDuration(minSeconds, maxSeconds)
+
     fun matches(track: Track): Boolean {
         val seconds = track.durationMs / 1000
-        return seconds >= minSeconds &&
-            (maxSeconds == 0 || seconds <= maxSeconds) &&
+        // Une plage impossible masquerait toute la bibliothèque : elle est ignorée.
+        val inRange = !durationValid || (seconds >= minSeconds && (maxSeconds == 0 || seconds <= maxSeconds))
+        return inRange &&
             track.extension !in excludedExtensions &&
             (watchAllFolders || track.folder in watchedFolders)
+    }
+
+    companion object {
+        /** [maxSeconds] à 0 : pas de limite haute. */
+        fun isValidDuration(minSeconds: Int, maxSeconds: Int): Boolean = maxSeconds == 0 || minSeconds <= maxSeconds
     }
 }
 

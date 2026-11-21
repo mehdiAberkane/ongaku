@@ -260,6 +260,7 @@
     <string name="filter_visible_count">%1$d morceaux affichés sur %2$d. Les autres sont masqués, jamais supprimés.</string>
     <string name="filter_min_duration">Durée min (s)</string>
     <string name="filter_max_duration">Durée max (s)</string>
+    <string name="filter_duration_invalid">Le minimum dépasse le maximum : ces durées ne sont pas appliquées.</string>
     <string name="filter_no_limit_note">Laisse vide pour ne pas mettre de limite.</string>
     <string name="filter_extensions">Extensions de fichier</string>
     <string name="filter_no_extension">sans extension</string>

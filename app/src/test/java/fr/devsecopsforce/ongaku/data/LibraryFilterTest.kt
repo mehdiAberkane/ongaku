@@ -46,4 +46,26 @@ class LibraryFilterTest {
         // Les dossiers choisis sont ignorés tant que tous les dossiers sont surveillés.
         assertTrue(filter.copy(watchAllFolders = true).matches(track(3, folder = "Download")))
     }
-}
+
+    @Test
+    fun `un minimum supérieur au maximum est une plage invalide`() {
+        assertFalse(LibraryFilter.isValidDuration(300, 60))
+        assertTrue(LibraryFilter.isValidDuration(60, 300))
+        assertTrue(LibraryFilter.isValidDuration(60, 60))
+        // Maximum vide : pas de limite haute, tout minimum convient.
+        assertTrue(LibraryFilter.isValidDuration(3_600, 0))
+    }
+
+    @Test
+    fun `une plage invalide déjà enregistrée ne masque pas la bibliothèque`() {
+        val filter = LibraryFilter(minSeconds = 300, maxSeconds = 60)
+        assertFalse(filter.durationValid)
+        assertTrue(filter.matches(track(1, durationMs = 10_000)))
+        assertTrue(filter.matches(track(2, durationMs = 600_000)))
+    }
+
+    @Test
+    fun `une plage invalide n'annule pas les autres critères`() {
+        val filter = LibraryFilter(minSeconds = 300, maxSeconds = 60, excludedExtensions = setOf("ogg"))
+        assertFalse(filter.matches(track(1, extension = "ogg")))
+    }}

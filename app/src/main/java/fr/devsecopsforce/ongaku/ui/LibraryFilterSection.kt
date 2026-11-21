@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,21 +53,52 @@ fun LibraryFilterSection(allTracks: List<Track>, visibleCount: Int) {
     Hint(stringResource(R.string.filter_visible_count, visibleCount, allTracks.size))
     Spacer(Modifier.height(12.dp))
 
+    // Saisie gardée à part : une plage impossible s'affiche, mais n'est pas enregistrée.
+    var minText by remember { mutableStateOf(secondsText(filter.minSeconds)) }
+    var maxText by remember { mutableStateOf(secondsText(filter.maxSeconds)) }
+    // Changement venu d'ailleurs (« Tout afficher ») : les champs le suivent.
+    LaunchedEffect(filter.minSeconds, filter.maxSeconds) {
+        if (seconds(minText) != filter.minSeconds) minText = secondsText(filter.minSeconds)
+        if (seconds(maxText) != filter.maxSeconds) maxText = secondsText(filter.maxSeconds)
+    }
+    val durationValid = LibraryFilter.isValidDuration(seconds(minText), seconds(maxText))
+    fun applyDuration() {
+        val min = seconds(minText)
+        val max = seconds(maxText)
+        if (LibraryFilter.isValidDuration(min, max)) store.update { it.copy(minSeconds = min, maxSeconds = max) }
+    }
+
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         SecondsField(
             label = stringResource(R.string.filter_min_duration),
-            value = filter.minSeconds,
-            onChange = { value -> store.update { it.copy(minSeconds = value) } },
+            text = minText,
+            onChange = {
+                minText = it
+                applyDuration()
+            },
+            isError = !durationValid,
             modifier = Modifier.weight(1f),
         )
         SecondsField(
             label = stringResource(R.string.filter_max_duration),
-            value = filter.maxSeconds,
-            onChange = { value -> store.update { it.copy(maxSeconds = value) } },
+            text = maxText,
+            onChange = {
+                maxText = it
+                applyDuration()
+            },
+            isError = !durationValid,
             modifier = Modifier.weight(1f),
         )
     }
-    Hint(stringResource(R.string.filter_no_limit_note))
+    if (durationValid) {
+        Hint(stringResource(R.string.filter_no_limit_note))
+    } else {
+        Text(
+            stringResource(R.string.filter_duration_invalid),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
 
     Spacer(Modifier.height(16.dp))
     Text(stringResource(R.string.filter_extensions))
@@ -157,22 +190,23 @@ private fun FolderRow(
     }
 }
 
+private fun secondsText(value: Int) = if (value == 0) "" else value.toString()
+
+private fun seconds(text: String) = text.toIntOrNull() ?: 0
+
 @Composable
 private fun SecondsField(
     label: String,
-    value: Int,
-    onChange: (Int) -> Unit,
+    text: String,
+    onChange: (String) -> Unit,
+    isError: Boolean,
     modifier: Modifier,
 ) {
-    var text by remember(value) { mutableStateOf(if (value == 0) "" else value.toString()) }
     OutlinedTextField(
         value = text,
-        onValueChange = { input ->
-            val digits = input.filter(Char::isDigit).take(MAX_DIGITS)
-            text = digits
-            onChange(digits.toIntOrNull() ?: 0)
-        },
+        onValueChange = { input -> onChange(input.filter(Char::isDigit).take(MAX_DIGITS)) },
         label = { Text(label) },
+        isError = isError,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier,
