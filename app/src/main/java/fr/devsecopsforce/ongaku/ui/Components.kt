@@ -52,14 +52,18 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.CoverShape
 import fr.devsecopsforce.ongaku.data.Track
+import fr.devsecopsforce.ongaku.data.TrackGroup
 import java.io.File
 
 @Composable
@@ -105,14 +109,30 @@ internal fun CenteredMessage(message: String, action: @Composable () -> Unit = {
     }
 }
 
-internal fun countLabel(count: Int) = "$count titre${if (count > 1) "s" else ""}"
+/** « 1 titre », « 12 titres ». */
+@Composable
+internal fun countLabel(count: Int) = pluralStringResource(R.plurals.common_track_count, count, count)
 
 /** « 12 titres », ou « 12 titres · 2 introuvables » quand des fichiers ont disparu. */
+@Composable
 internal fun countLabel(ids: Collection<Long>, existingIds: Set<Long>): String {
     val missing = ids.count { it !in existingIds }
     val label = countLabel(ids.size - missing)
-    return if (missing == 0) label else "$label · $missing introuvable${if (missing > 1) "s" else ""}"
+    return if (missing == 0) {
+        label
+    } else {
+        stringResource(
+            R.string.common_count_with_missing,
+            label,
+            pluralStringResource(R.plurals.common_missing_count, missing, missing),
+        )
+    }
 }
+
+/** Sous-titre d'un album (son artiste) ou d'un artiste (son nombre de titres). */
+@Composable
+internal fun groupSubtitle(group: TrackGroup): String =
+    if (group.isArtist) countLabel(group.tracks.size) else group.subtitle
 
 @Composable
 internal fun TrackRow(
@@ -142,7 +162,7 @@ internal fun FavoriteButton(trackId: Long, actions: TrackActions) {
     IconButton(onClick = { actions.toggleFavorite(trackId) }) {
         Icon(
             if (favorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            if (favorite) "Retirer des favoris" else "Ajouter aux favoris",
+            stringResource(if (favorite) R.string.menu_favorite_remove else R.string.menu_favorite_add),
             tint = if (favorite) {
                 MaterialTheme.colorScheme.primary
             } else {
@@ -158,18 +178,18 @@ internal fun QueueMenuButton(onPlayNext: () -> Unit, onAddToQueue: () -> Unit, o
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
-            Icon(Icons.Rounded.MoreVert, "Options de la liste")
+            Icon(Icons.Rounded.MoreVert, stringResource(R.string.menu_list_options))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            MenuEntry("Lire ensuite", Icons.AutoMirrored.Rounded.PlaylistPlay) {
+            MenuEntry(stringResource(R.string.menu_play_next), Icons.AutoMirrored.Rounded.PlaylistPlay) {
                 open = false
                 onPlayNext()
             }
-            MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
+            MenuEntry(stringResource(R.string.menu_add_to_queue), Icons.AutoMirrored.Rounded.QueueMusic) {
                 open = false
                 onAddToQueue()
             }
-            MenuEntry("Ajouter à une liste", Icons.AutoMirrored.Rounded.PlaylistAdd) {
+            MenuEntry(stringResource(R.string.menu_add_to_playlist), Icons.AutoMirrored.Rounded.PlaylistAdd) {
                 open = false
                 onAddToPlaylist()
             }
@@ -182,35 +202,35 @@ internal fun TrackMenuButton(trackId: Long, actions: TrackActions, queueEntries:
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
-            Icon(Icons.Rounded.MoreVert, "Options du morceau")
+            Icon(Icons.Rounded.MoreVert, stringResource(R.string.menu_track_options))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (queueEntries) {
-                MenuEntry("Lire ensuite", Icons.AutoMirrored.Rounded.PlaylistPlay) {
+                MenuEntry(stringResource(R.string.menu_play_next), Icons.AutoMirrored.Rounded.PlaylistPlay) {
                     open = false
                     actions.playNext(trackId)
                 }
-                MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
+                MenuEntry(stringResource(R.string.menu_add_to_queue), Icons.AutoMirrored.Rounded.QueueMusic) {
                     open = false
                     actions.addToQueue(trackId)
                 }
             }
-            MenuEntry("Ajouter à une liste", Icons.AutoMirrored.Rounded.PlaylistAdd) {
+            MenuEntry(stringResource(R.string.menu_add_to_playlist), Icons.AutoMirrored.Rounded.PlaylistAdd) {
                 open = false
                 actions.addToPlaylist(trackId)
             }
             actions.removeFromPlaylist?.let { remove ->
-                MenuEntry("Retirer de cette liste", Icons.Rounded.Delete) {
+                MenuEntry(stringResource(R.string.menu_remove_from_playlist), Icons.Rounded.Delete) {
                     open = false
                     remove(trackId)
                 }
             }
-            MenuEntry("Choisir une image de fond", Icons.Rounded.Image) {
+            MenuEntry(stringResource(R.string.menu_pick_background), Icons.Rounded.Image) {
                 open = false
                 actions.pickBackground(trackId)
             }
             if (trackId in actions.data.trackBackgrounds) {
-                MenuEntry("Retirer l'image de fond", Icons.Rounded.Delete) {
+                MenuEntry(stringResource(R.string.menu_remove_background), Icons.Rounded.Delete) {
                     open = false
                     actions.removeBackground(trackId)
                 }

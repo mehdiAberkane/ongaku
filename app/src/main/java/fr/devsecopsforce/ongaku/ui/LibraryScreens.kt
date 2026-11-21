@@ -68,11 +68,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.GroupRow
@@ -112,7 +115,6 @@ internal fun LibraryTabs(
     onCreatePlaylist: () -> Unit,
     existingIds: Set<Long>,
 ) {
-    val titles = listOf("Titres", "Albums", "Artistes", "Listes")
     // Index par lettre seulement quand la liste est rangée par ordre alphabétique.
     val trackLetters = remember(tracks, trackSort) {
         if (trackSort.alphabetical) tracks.letterPositions { it.sortText(trackSort) } else null
@@ -125,21 +127,21 @@ internal fun LibraryTabs(
     Column(Modifier.fillMaxSize()) {
         PlayAllButtons(onPlayAll)
         PrimaryTabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
-            titles.forEachIndexed { index, title ->
+            LIBRARY_TABS.forEachIndexed { index, title ->
                 Tab(
                     selected = tab == index,
                     onClick = { onTabChange(index) },
-                    text = { Text(title, maxLines = 1) },
+                    text = { Text(stringResource(title), maxLines = 1) },
                 )
             }
         }
         when (tab) {
             0 -> {
-                SortSelector(TrackSort.entries, trackSort, { it.label }, onTrackSortChange)
+                SortSelector(TrackSort.entries, trackSort, { stringResource(it.label) }, onTrackSortChange)
                 TrackList(tracks, currentId, actions, onPlay, letters = trackLetters)
             }
             1 -> {
-                SortSelector(AlbumSort.entries, albumSort, { it.label }, onAlbumSortChange)
+                SortSelector(AlbumSort.entries, albumSort, { stringResource(it.label) }, onAlbumSortChange)
                 GroupList(
                     albums,
                     onOpenGroup,
@@ -153,7 +155,7 @@ internal fun LibraryTabs(
                     },
                 )
             }
-            2 -> GroupList(artists, onOpenGroup, letters = artistLetters)
+            2 -> GroupList(artists, onOpenGroup, letters = artistLetters, subtitle = { groupSubtitle(it) })
             else -> PlaylistsTab(
                 actions.data,
                 existingIds,
@@ -182,7 +184,7 @@ internal fun PlayAllButtons(onPlayAll: (shuffled: Boolean) -> Unit) {
         ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = null)
             Spacer(Modifier.size(8.dp))
-            Text("Lire", maxLines = 1)
+            Text(stringResource(R.string.library_play), maxLines = 1)
         }
         FilledTonalButton(
             onClick = { onPlayAll(true) },
@@ -190,7 +192,7 @@ internal fun PlayAllButtons(onPlayAll: (shuffled: Boolean) -> Unit) {
         ) {
             Icon(Icons.Rounded.Shuffle, contentDescription = null)
             Spacer(Modifier.size(8.dp))
-            Text("Lecture aléatoire", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.library_shuffle), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -200,7 +202,7 @@ internal fun PlayAllButtons(onPlayAll: (shuffled: Boolean) -> Unit) {
 internal fun <T> SortSelector(
     options: List<T>,
     selected: T,
-    label: (T) -> String,
+    label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -208,7 +210,7 @@ internal fun <T> SortSelector(
         TextButton(onClick = { open = true }) {
             Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Trier par : ${label(selected)}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.library_sort_by, label(selected)), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { option ->
@@ -256,12 +258,12 @@ internal fun SearchScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .focusRequester(focusRequester),
-            placeholder = { Text("Titre, album ou artiste") },
+            placeholder = { Text(stringResource(R.string.search_placeholder)) },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }) {
-                        Icon(Icons.Rounded.Close, "Effacer la recherche")
+                        Icon(Icons.Rounded.Close, stringResource(R.string.search_clear))
                     }
                 }
             },
@@ -270,11 +272,11 @@ internal fun SearchScreen(
             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
         )
         when {
-            query.isBlank() -> CenteredMessage("Cherche dans tes titres, albums et artistes. Les accents et les majuscules ne comptent pas.")
-            results.isEmpty -> CenteredMessage("Aucun résultat pour « ${query.trim()} ».")
+            query.isBlank() -> CenteredMessage(stringResource(R.string.search_hint))
+            results.isEmpty -> CenteredMessage(stringResource(R.string.search_no_result, query.trim()))
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 if (results.tracks.isNotEmpty()) {
-                    item(key = "titres") { SectionHeader("Titres (${results.tracks.size})") }
+                    item(key = "titres") { SectionHeader(stringResource(R.string.search_section_tracks, results.tracks.size)) }
                     itemsIndexed(results.tracks, key = { _, track -> "t${track.id}" }) { index, track ->
                         TrackRow(track, track.id.toString() == currentId, actions) {
                             keyboard?.hide()
@@ -283,15 +285,15 @@ internal fun SearchScreen(
                     }
                 }
                 if (results.albums.isNotEmpty()) {
-                    item(key = "albums") { SectionHeader("Albums (${results.albums.size})") }
+                    item(key = "albums") { SectionHeader(stringResource(R.string.search_section_albums, results.albums.size)) }
                     items(results.albums, key = { "a${it.key}" }) { album ->
                         ListRow(album.title, album.subtitle, album.artworkUri, onClick = { onOpenGroup(album) })
                     }
                 }
                 if (results.artists.isNotEmpty()) {
-                    item(key = "artistes") { SectionHeader("Artistes (${results.artists.size})") }
+                    item(key = "artistes") { SectionHeader(stringResource(R.string.search_section_artists, results.artists.size)) }
                     items(results.artists, key = { "r${it.key}" }) { artist ->
-                        ListRow(artist.title, artist.subtitle, artist.artworkUri, onClick = { onOpenGroup(artist) })
+                        ListRow(artist.title, groupSubtitle(artist), artist.artworkUri, onClick = { onOpenGroup(artist) })
                     }
                 }
             }
@@ -314,16 +316,12 @@ internal fun WithMissingBanner(missing: Int, onRemove: () -> Unit, content: @Com
         ) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (missing > 1) {
-                        "$missing morceaux introuvables : leur fichier n'est plus sur le téléphone."
-                    } else {
-                        "1 morceau introuvable : son fichier n'est plus sur le téléphone."
-                    },
+                    pluralStringResource(R.plurals.library_missing_banner, missing, missing),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
-                TextButton(onClick = onRemove) { Text("Retirer") }
+                TextButton(onClick = onRemove) { Text(stringResource(R.string.common_remove)) }
             }
         }
         Box(Modifier.weight(1f)) { content() }
@@ -351,10 +349,10 @@ internal fun PlaylistsTab(
     onCreatePlaylist: () -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize()) {
-        item { SectionHeader("Playlists") }
+        item { SectionHeader(stringResource(R.string.playlists_section_smart)) }
         item {
             ListRow(
-                title = "Favoris",
+                title = stringResource(R.string.main_title_favorites),
                 subtitle = countLabel(data.favorites, existingIds),
                 artworkUri = null,
                 icon = Icons.Rounded.Favorite,
@@ -363,8 +361,8 @@ internal fun PlaylistsTab(
         }
         item {
             ListRow(
-                title = "Ajouts récents",
-                subtitle = "Les $SMART_PLAYLIST_SIZE derniers morceaux ajoutés",
+                title = stringResource(R.string.main_title_recent),
+                subtitle = stringResource(R.string.playlists_recent_subtitle, SMART_PLAYLIST_SIZE),
                 artworkUri = null,
                 icon = Icons.Rounded.Schedule,
                 onClick = onOpenRecent,
@@ -372,18 +370,18 @@ internal fun PlaylistsTab(
         }
         item {
             ListRow(
-                title = "Top 50",
-                subtitle = "Tes $SMART_PLAYLIST_SIZE morceaux les plus écoutés",
+                title = stringResource(R.string.main_title_top50),
+                subtitle = stringResource(R.string.playlists_top50_subtitle, SMART_PLAYLIST_SIZE),
                 artworkUri = null,
                 icon = Icons.Rounded.Star,
                 onClick = onOpenTop,
             )
         }
-        item { SectionHeader("Mes playlists") }
+        item { SectionHeader(stringResource(R.string.playlists_section_mine)) }
         item {
             ListRow(
-                title = "Nouvelle liste",
-                subtitle = "Créer une liste de lecture",
+                title = stringResource(R.string.playlist_new),
+                subtitle = stringResource(R.string.playlists_new_subtitle),
                 artworkUri = null,
                 icon = Icons.Rounded.Add,
                 onClick = onCreatePlaylist,
@@ -408,7 +406,7 @@ internal fun TrackList(
     actions: TrackActions,
     onPlay: (List<Track>, Int) -> Unit,
     emptyMessage: String = "",
-    extraLabel: (Track) -> String? = { null },
+    extraLabel: @Composable (Track) -> String? = { null },
     letters: List<Pair<Char, Int>>? = null,
 ) {
     if (tracks.isEmpty()) {
@@ -480,7 +478,7 @@ internal fun ReorderableTrackList(
                         TrackMenuButton(track.id, actions)
                         Icon(
                             Icons.Rounded.DragHandle,
-                            "Déplacer",
+                            stringResource(R.string.library_move),
                             modifier = Modifier
                                 .padding(start = 4.dp, end = 12.dp)
                                 .pointerInput(track.id) {
@@ -535,7 +533,7 @@ internal fun GroupTrackList(
             when (row) {
                 is GroupRow.AlbumHeader -> AlbumHeaderRow(row)
                 is GroupRow.DiscHeader -> Text(
-                    "Disque ${row.disc}",
+                    stringResource(R.string.library_disc, row.disc),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
@@ -568,7 +566,7 @@ internal fun AlbumHeaderRow(header: GroupRow.AlbumHeader) {
             Text(
                 listOfNotNull(
                     header.year?.toString(),
-                    "${header.trackCount} titre${if (header.trackCount > 1) "s" else ""}",
+                    countLabel(header.trackCount),
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -582,7 +580,7 @@ internal fun GroupList(
     groups: List<TrackGroup>,
     onOpen: (TrackGroup) -> Unit,
     letters: List<Pair<Char, Int>>? = null,
-    subtitle: (TrackGroup) -> String = { it.subtitle },
+    subtitle: @Composable (TrackGroup) -> String = { it.subtitle },
 ) {
     val listState = rememberLazyListState()
     FastScrollList(listState, letters, groups.size) {
@@ -598,3 +596,11 @@ internal fun GroupList(
         }
     }
 }
+
+/** Onglets de la bibliothèque, dans l'ordre de leur index (voir aussi l'onglet au démarrage). */
+internal val LIBRARY_TABS = listOf(
+    R.string.library_tab_tracks,
+    R.string.library_tab_albums,
+    R.string.library_tab_artists,
+    R.string.library_tab_playlists,
+)

@@ -72,8 +72,10 @@ class GroupingTest {
         ).artists()
 
         assertEquals(listOf("abba", "Zed"), artists.map { it.title })
-        assertEquals("2 titres", artists[0].subtitle)
-        assertEquals("1 titre", artists[1].subtitle)
+        // Le nombre de titres affiché sous l'artiste vient de la taille de sa liste.
+        assertEquals(2, artists[0].tracks.size)
+        assertEquals(1, artists[1].tracks.size)
+        assertEquals(listOf("", ""), artists.map { it.subtitle })
         assertEquals(listOf(3L, 2L), artists[0].tracks.map { it.id })
     }
 
@@ -130,7 +132,7 @@ class GroupingTest {
 
     @Test
     fun `un morceau sans artiste prend celui de l'album`() {
-        val artists = listOf(track(1, artist = UNKNOWN_ARTIST, albumArtist = "Zaz")).artists()
+        val artists = listOf(track(1, artist = "Artiste inconnu", artistMissing = true, albumArtist = "Zaz")).artists()
 
         assertEquals(listOf("Zaz"), artists.map { it.title })
     }

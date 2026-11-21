@@ -1,7 +1,9 @@
 package fr.devsecopsforce.ongaku.data
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.core.content.edit
+import fr.devsecopsforce.ongaku.R
 import java.text.Normalizer
 
 private val COMBINING_MARKS = Regex("\\p{Mn}+")
@@ -16,19 +18,19 @@ fun String.indexLetter(): Char {
     return if (first in 'A'..'Z') first else '#'
 }
 
-enum class TrackSort(val label: String, val alphabetical: Boolean) {
-    TITLE("Titre", true),
-    ARTIST("Artiste", true),
-    ALBUM("Album", true),
-    DATE_ADDED("Date d'ajout, récents d'abord", false),
-    DURATION("Durée, longs d'abord", false),
-    PLAYS("Écoutes, plus écoutés d'abord", false),
+enum class TrackSort(@StringRes val label: Int, val alphabetical: Boolean) {
+    TITLE(R.string.sort_title, true),
+    ARTIST(R.string.sort_artist, true),
+    ALBUM(R.string.sort_album, true),
+    DATE_ADDED(R.string.sort_date_added, false),
+    DURATION(R.string.sort_duration, false),
+    PLAYS(R.string.sort_plays, false),
 }
 
-enum class AlbumSort(val label: String, val alphabetical: Boolean) {
-    NAME("Nom", true),
-    ARTIST("Artiste", true),
-    YEAR("Année, récents d'abord", false),
+enum class AlbumSort(@StringRes val label: Int, val alphabetical: Boolean) {
+    NAME(R.string.sort_name, true),
+    ARTIST(R.string.sort_artist, true),
+    YEAR(R.string.sort_year, false),
 }
 
 private fun <T> List<T>.sortedByKey(key: (T) -> String): List<T> =

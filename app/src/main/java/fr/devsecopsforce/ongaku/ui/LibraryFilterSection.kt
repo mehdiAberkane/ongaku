@@ -27,9 +27,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.LibraryFilter
 import fr.devsecopsforce.ongaku.data.LibraryFilterStore
 import fr.devsecopsforce.ongaku.data.Track
@@ -45,29 +47,30 @@ fun LibraryFilterSection(allTracks: List<Track>, visibleCount: Int) {
         allTracks.groupingBy { it.folder }.eachCount().toSortedMap().toList()
     }
 
-    SectionTitle("Morceaux affichés dans Ongaku")
-    Hint("$visibleCount morceaux affichés sur ${allTracks.size}. Les autres sont masqués, jamais supprimés.")
+    SectionTitle(stringResource(R.string.filter_title))
+    Hint(stringResource(R.string.filter_visible_count, visibleCount, allTracks.size))
     Spacer(Modifier.height(12.dp))
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         SecondsField(
-            label = "Durée min (s)",
+            label = stringResource(R.string.filter_min_duration),
             value = filter.minSeconds,
             onChange = { value -> store.update { it.copy(minSeconds = value) } },
             modifier = Modifier.weight(1f),
         )
         SecondsField(
-            label = "Durée max (s)",
+            label = stringResource(R.string.filter_max_duration),
             value = filter.maxSeconds,
             onChange = { value -> store.update { it.copy(maxSeconds = value) } },
             modifier = Modifier.weight(1f),
         )
     }
-    Hint("Laisse vide pour ne pas mettre de limite.")
+    Hint(stringResource(R.string.filter_no_limit_note))
 
     Spacer(Modifier.height(16.dp))
-    Text("Extensions de fichier")
+    Text(stringResource(R.string.filter_extensions))
     Spacer(Modifier.height(4.dp))
+    val noExtension = stringResource(R.string.filter_no_extension)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         extensions.forEach { (extension, count) ->
             val included = extension !in filter.excludedExtensions
@@ -84,14 +87,14 @@ fun LibraryFilterSection(allTracks: List<Track>, visibleCount: Int) {
                         )
                     }
                 },
-                label = { Text("${extension.ifEmpty { "sans extension" }} ($count)") },
+                label = { Text("${extension.ifEmpty { noExtension }} ($count)") },
             )
         }
     }
 
     Spacer(Modifier.height(16.dp))
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Surveiller tous les dossiers", Modifier.weight(1f))
+        Text(stringResource(R.string.filter_watch_all_folders), Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
         Switch(
             checked = filter.watchAllFolders,
@@ -111,7 +114,7 @@ fun LibraryFilterSection(allTracks: List<Track>, visibleCount: Int) {
         )
     }
     if (!filter.watchAllFolders) {
-        Hint("Un nouveau dossier devra être coché ici pour apparaître.")
+        Hint(stringResource(R.string.filter_new_folder_note))
         Column {
             folders.forEach { (folder, count) ->
                 FolderRow(folder, count, filter) { checked ->
@@ -130,7 +133,7 @@ fun LibraryFilterSection(allTracks: List<Track>, visibleCount: Int) {
     }
 
     Spacer(Modifier.height(8.dp))
-    TextButton(onClick = { store.update { LibraryFilter() } }) { Text("Tout afficher") }
+    TextButton(onClick = { store.update { LibraryFilter() } }) { Text(stringResource(R.string.filter_show_all)) }
 }
 
 @Composable
@@ -148,7 +151,7 @@ private fun FolderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = onChange)
-        Text(folder.ifEmpty { "Racine" }, Modifier.weight(1f))
+        Text(folder.ifEmpty { stringResource(R.string.filter_root_folder) }, Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
         Text(count.toString())
     }

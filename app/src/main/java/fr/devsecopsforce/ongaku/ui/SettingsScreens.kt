@@ -35,9 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.albums
@@ -87,9 +89,15 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        SectionTitle("Lecture")
+        SectionTitle(stringResource(R.string.settings_playback))
         val seconds = crossfade.roundToInt()
-        Text(if (seconds == 0) "Fondu enchaîné : désactivé" else "Fondu enchaîné : $seconds s")
+        Text(
+            if (seconds == 0) {
+                stringResource(R.string.settings_crossfade_off)
+            } else {
+                stringResource(R.string.settings_crossfade, seconds)
+            },
+        )
         Slider(
             value = crossfade,
             valueRange = 0f..PlaybackSettings.MAX_CROSSFADE_SECONDS.toFloat(),
@@ -99,10 +107,10 @@ fun SettingsScreen(
                 settings.crossfadeSeconds = it.roundToInt()
             },
         )
-        Hint("S'applique quand un morceau se termine, pas quand tu passes au suivant toi-même.")
+        Hint(stringResource(R.string.settings_crossfade_note))
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Pause quand les écouteurs sont débranchés", Modifier.weight(1f))
+            Text(stringResource(R.string.settings_pause_on_noisy), Modifier.weight(1f))
             Spacer(Modifier.width(12.dp))
             Switch(
                 checked = pauseOnNoisy,
@@ -115,7 +123,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Écran de lecture Ongaku sur le verrouillage", Modifier.weight(1f))
+            Text(stringResource(R.string.settings_lock_screen_player), Modifier.weight(1f))
             Spacer(Modifier.width(12.dp))
             Switch(
                 checked = lockScreenPlayer,
@@ -127,8 +135,8 @@ fun SettingsScreen(
             )
         }
         if (lockScreenPlayer && !overlayAllowed) {
-            Hint("Il manque l'autorisation Android « Superposition ». Elle ne donne aucun accès à tes fichiers.")
-            OutlinedButton(onClick = requestOverlay) { Text("Autoriser") }
+            Hint(stringResource(R.string.settings_overlay_missing))
+            OutlinedButton(onClick = requestOverlay) { Text(stringResource(R.string.common_allow)) }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -138,13 +146,13 @@ fun SettingsScreen(
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        SectionTitle("Artistes")
+        SectionTitle(stringResource(R.string.settings_artists))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Ranger « A feat. B » sous l'artiste A", Modifier.weight(1f))
+            Text(stringResource(R.string.settings_merge_featuring), Modifier.weight(1f))
             Spacer(Modifier.width(12.dp))
             Switch(checked = mergeFeaturing, onCheckedChange = onMergeFeaturingChange)
         }
-        Hint("Les tags de tes fichiers ne sont pas modifiés.")
+        Hint(stringResource(R.string.settings_merge_featuring_note))
 
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
@@ -156,12 +164,12 @@ fun SettingsScreen(
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        SectionTitle("Sauvegarde des listes")
-        Hint("Pour Google Drive, choisis Drive dans la fenêtre qui s'ouvre.")
+        SectionTitle(stringResource(R.string.settings_backup))
+        Hint(stringResource(R.string.settings_backup_drive_note))
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = { exporter.launch("ongaku-sauvegarde-${LocalDate.now()}.json") }) {
-                Text("Exporter")
+                Text(stringResource(R.string.settings_export))
             }
             OutlinedButton(
                 onClick = {
@@ -169,10 +177,10 @@ fun SettingsScreen(
                         arrayOf("application/json", "application/octet-stream", "text/plain"),
                     )
                 },
-            ) { Text("Importer") }
+            ) { Text(stringResource(R.string.settings_import)) }
         }
         Spacer(Modifier.height(8.dp))
-        Hint("L'import ajoute à l'existant : il ne supprime aucune liste ni aucun favori.")
+        Hint(stringResource(R.string.settings_import_note))
     }
 }
 
@@ -197,15 +205,15 @@ fun StatsScreen(tracks: List<Track>, settings: PlaybackSettings, mergeFeaturing:
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        SectionTitle("Bibliothèque")
-        StatRow("Morceaux", tracks.size.toString())
-        StatRow("Albums", albumCount.toString())
-        StatRow("Artistes", artistCount.toString())
-        StatRow("Taille totale", Formatter.formatFileSize(context, totalSize))
-        StatRow("Durée totale", formatLongDuration(totalDuration))
+        SectionTitle(stringResource(R.string.stats_library))
+        StatRow(stringResource(R.string.stats_tracks), tracks.size.toString())
+        StatRow(stringResource(R.string.stats_albums), albumCount.toString())
+        StatRow(stringResource(R.string.stats_artists), artistCount.toString())
+        StatRow(stringResource(R.string.stats_total_size), Formatter.formatFileSize(context, totalSize))
+        StatRow(stringResource(R.string.stats_total_duration), formatLongDuration(totalDuration))
         Spacer(Modifier.height(24.dp))
-        SectionTitle("Écoute")
-        StatRow("Temps écouté dans Ongaku", formatLongDuration(listenedMs))
+        SectionTitle(stringResource(R.string.stats_listening))
+        StatRow(stringResource(R.string.stats_listened_time), formatLongDuration(listenedMs))
     }
 }
 
@@ -241,14 +249,15 @@ private fun StatRow(label: String, value: String) {
     }
 }
 
+@Composable
 private fun formatLongDuration(ms: Long): String {
     val totalMinutes = ms / 60_000
     val days = totalMinutes / (24 * 60)
     val hours = totalMinutes / 60 % 24
     val minutes = totalMinutes % 60
     return when {
-        days > 0 -> "$days j $hours h $minutes min"
-        hours > 0 -> "$hours h $minutes min"
-        else -> "$minutes min"
+        days > 0 -> stringResource(R.string.stats_duration_days, days, hours, minutes)
+        hours > 0 -> stringResource(R.string.stats_duration_hours, hours, minutes)
+        else -> stringResource(R.string.stats_duration_minutes, minutes)
     }
 }

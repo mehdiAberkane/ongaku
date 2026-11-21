@@ -2,7 +2,10 @@ package fr.devsecopsforce.ongaku.data
 
 import android.net.Uri
 
-/** Un album ou un artiste : un titre affiché et les morceaux qu'il regroupe. */
+/**
+ * Un album ou un artiste : un titre affiché et les morceaux qu'il regroupe. [subtitle] : l'artiste
+ * d'un album ; vide pour un artiste, dont l'écran affiche le nombre de morceaux.
+ */
 data class TrackGroup(
     val key: String,
     val title: String,
@@ -16,8 +19,6 @@ data class TrackGroup(
     val isArtist: Boolean = false,
 )
 
-const val UNKNOWN_ARTIST = "Artiste inconnu"
-
 /** « A feat. B », « A (ft. B) », « A featuring B » : tout ce qui suit l'artiste principal. */
 private val FEATURING = Regex("""\s+[(\[]?(?:feat|ft|featuring)\b\.?\s.*$""", RegexOption.IGNORE_CASE)
 
@@ -29,7 +30,7 @@ fun primaryArtist(artist: String, mergeFeaturing: Boolean): String {
 
 /** L'artiste sous lequel ranger un morceau : celui de l'album s'il manque le sien. */
 private fun Track.groupArtist(mergeFeaturing: Boolean): String {
-    val own = if (artist == UNKNOWN_ARTIST && albumArtist.isNotEmpty()) albumArtist else artist
+    val own = if (artistMissing && albumArtist.isNotEmpty()) albumArtist else artist
     return primaryArtist(own, mergeFeaturing)
 }
 
@@ -76,7 +77,7 @@ fun List<Track>.artists(mergeFeaturing: Boolean = false): List<TrackGroup> =
             TrackGroup(
                 key = "artist:$key",
                 title = tracks.mostCommon { it.groupArtist(mergeFeaturing) },
-                subtitle = "${tracks.size} titre${if (tracks.size > 1) "s" else ""}",
+                subtitle = "",
                 artworkUri = sorted.first().artworkUri,
                 tracks = sorted,
                 isArtist = true,

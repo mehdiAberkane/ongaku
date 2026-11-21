@@ -11,7 +11,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.Player
+import androidx.annotation.StringRes
 import androidx.media3.session.SessionCommand
+import fr.devsecopsforce.ongaku.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -46,9 +48,9 @@ class AutoplayGuard(
                 try {
                     val queue = ResumeQueue.load(context)
                     current.setMediaItems(queue.mediaItems, queue.startIndex, queue.startPositionMs)
-                    play(current, "lecture lancée pour $name")
+                    play(current, context.getString(R.string.autoplay_log_started, name))
                 } catch (e: Exception) {
-                    journal("aucun morceau à lire")
+                    journal(R.string.autoplay_log_nothing_to_play)
                     stop()
                     return@launch
                 }
@@ -57,11 +59,11 @@ class AutoplayGuard(
             return
         }
         if (current.isPlaying) {
-            journal("déjà en lecture, rien à faire")
+            journal(R.string.autoplay_log_already_playing)
             deviceAddress = null
             return
         }
-        play(current, "lecture lancée pour $name")
+        play(current, context.getString(R.string.autoplay_log_started, name))
         scheduleChecks()
     }
 
@@ -70,10 +72,10 @@ class AutoplayGuard(
         if (deviceAddress == null || stoppedByUser) return
         if (AutoplayRules.userTookOver(controllerPackage, context.packageName)) {
             stoppedByUser = true
-            journal("tu as repris la main ($controllerPackage) : surveillance arrêtée")
+            journal(R.string.autoplay_log_user_took_over, controllerPackage)
             stop()
         } else {
-            journal("commande lecture/pause reçue de $controllerPackage")
+            journal(R.string.autoplay_log_play_pause_from, controllerPackage)
         }
     }
 
@@ -97,12 +99,12 @@ class AutoplayGuard(
         val routed = routedTo(address)
         if (AutoplayRules.shouldResume(current.isPlaying, stoppedByUser, resumes, routed)) {
             resumes++
-            play(current, "arrêtée sans toi : relance n°$resumes (après ${delayMs / 1000} s)")
+            play(current, context.getString(R.string.autoplay_log_resumed, resumes, delayMs / 1000))
         } else if (!current.isPlaying && !routed) {
-            journal("arrêtée, mais la voiture n'est plus la sortie audio : pas de relance")
+            journal(R.string.autoplay_log_not_routed)
         }
         if (last) {
-            journal(if (current.isPlaying) "fin de la surveillance : en lecture" else "fin de la surveillance : à l'arrêt")
+            journal(if (current.isPlaying) R.string.autoplay_log_end_playing else R.string.autoplay_log_end_stopped)
             stop()
         }
     }
@@ -111,6 +113,8 @@ class AutoplayGuard(
     private fun routedTo(address: String): Boolean = routedTo(context, address)
 
     private fun journal(message: String) = AutoplayJournal.add(context, message)
+
+    private fun journal(@StringRes message: Int, vararg args: Any) = journal(context.getString(message, *args))
 
     fun stop() {
         checks.forEach(handler::removeCallbacks)

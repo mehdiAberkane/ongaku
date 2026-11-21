@@ -20,6 +20,7 @@ import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.LibraryFilterStore
 import fr.devsecopsforce.ongaku.data.LibraryCache
 import fr.devsecopsforce.ongaku.data.Track
@@ -97,13 +98,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 _state.value = loadedState(LibraryCache.tracks(getApplication()))
             } catch (e: SecurityException) {
-                _state.value = LibraryState(error = "Accès à la musique refusé.")
+                _state.value = LibraryState(error = getApplication<Application>().getString(R.string.library_error_permission))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // MediaStore indisponible (carte retirée, base en reconstruction…) : l'écran le dit et propose de réessayer.
                 Log.w(TAG, "bibliothèque illisible", e)
-                _state.value = LibraryState(error = "Impossible de lire la musique du téléphone pour l'instant.")
+                _state.value = LibraryState(
+                    error = getApplication<Application>().getString(R.string.library_error_unavailable),
+                )
             }
         }
     }
