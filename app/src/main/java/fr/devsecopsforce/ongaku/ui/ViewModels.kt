@@ -9,6 +9,7 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -27,6 +28,7 @@ import fr.devsecopsforce.ongaku.playback.PlaybackService
 import fr.devsecopsforce.ongaku.playback.QueueCommands
 import fr.devsecopsforce.ongaku.playback.ResumeQueue
 import fr.devsecopsforce.ongaku.playback.playOrder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,6 +98,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 _state.value = loadedState(LibraryCache.tracks(getApplication()))
             } catch (e: SecurityException) {
                 _state.value = LibraryState(error = "Accès à la musique refusé.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // MediaStore indisponible (carte retirée, base en reconstruction…) : l'écran le dit et propose de réessayer.
+                Log.w(TAG, "bibliothèque illisible", e)
+                _state.value = LibraryState(error = "Impossible de lire la musique du téléphone pour l'instant.")
             }
         }
     }
@@ -111,6 +119,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private companion object {
+        const val TAG = "OngakuLibrary"
         const val RELOAD_DELAY_MS = 1500L
     }
 }
