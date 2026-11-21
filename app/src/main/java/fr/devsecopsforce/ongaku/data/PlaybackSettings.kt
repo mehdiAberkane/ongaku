@@ -34,6 +34,11 @@ class PlaybackSettings(context: Context) {
         get() = prefs.getBoolean(KEY_MERGE_FEATURING, true)
         set(value) = prefs.edit { putBoolean(KEY_MERGE_FEATURING, value) }
 
+    /** Minuteur de sommeil : le volume baisse sur la dernière minute avant l'arrêt. */
+    var sleepFade: Boolean
+        get() = prefs.getBoolean(KEY_SLEEP_FADE, true)
+        set(value) = prefs.edit { putBoolean(KEY_SLEEP_FADE, value) }
+
     var listenedMs: Long
         get() = prefs.getLong(KEY_LISTENED, 0)
         set(value) = prefs.edit { putLong(KEY_LISTENED, value) }
@@ -47,5 +52,6 @@ class PlaybackSettings(context: Context) {
         private const val KEY_BLUETOOTH_AUTOPLAY = "bluetooth_autoplay"
         private const val KEY_BLUETOOTH_DEVICES = "bluetooth_devices"
         private const val KEY_MERGE_FEATURING = "merge_featuring"
+        private const val KEY_SLEEP_FADE = "sleep_fade"
     }
 }

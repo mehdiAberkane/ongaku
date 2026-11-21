@@ -28,6 +28,8 @@ import fr.devsecopsforce.ongaku.data.toMediaItem
 import fr.devsecopsforce.ongaku.playback.PlaybackService
 import fr.devsecopsforce.ongaku.playback.QueueCommands
 import fr.devsecopsforce.ongaku.playback.ResumeQueue
+import fr.devsecopsforce.ongaku.playback.SleepTimer
+import fr.devsecopsforce.ongaku.playback.SleepTimerState
 import fr.devsecopsforce.ongaku.playback.playOrder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -359,6 +361,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 else -> Player.REPEAT_MODE_OFF
             }
         }
+    }
+
+    /** Minuteur de sommeil en cours ; tenu par le service, qui continue sans cet écran. */
+    val sleepTimer: StateFlow<SleepTimerState?> = SleepTimer.state
+
+    fun setSleepTimer(minutes: Int) {
+        controller?.sendCustomCommand(SleepTimer.COMMAND, SleepTimer.minutesArgs(minutes))
+    }
+
+    fun sleepAtTrackEnd() {
+        controller?.sendCustomCommand(SleepTimer.COMMAND, SleepTimer.trackEndArgs())
+    }
+
+    fun cancelSleepTimer() {
+        controller?.sendCustomCommand(SleepTimer.COMMAND, SleepTimer.cancelArgs())
     }
 
     override fun onCleared() {

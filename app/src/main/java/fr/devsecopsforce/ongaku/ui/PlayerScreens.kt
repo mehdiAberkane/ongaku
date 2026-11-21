@@ -209,6 +209,7 @@ internal fun FullPlayer(
                         }
                     }
                     Spacer(Modifier.weight(1f))
+                    SleepTimerButton(viewModel)
                     if (trackId != null && actions != null) {
                         FavoriteButton(trackId, actions)
                         IconButton(onClick = { queueOpen = true }) {

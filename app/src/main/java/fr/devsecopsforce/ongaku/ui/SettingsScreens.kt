@@ -60,6 +60,7 @@ fun SettingsScreen(
 ) {
     var crossfade by remember { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     var pauseOnNoisy by remember { mutableStateOf(settings.pauseOnNoisy) }
+    var sleepFade by remember { mutableStateOf(settings.sleepFade) }
     var lockScreenPlayer by remember { mutableStateOf(settings.lockScreenPlayer) }
     val context = LocalContext.current
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
@@ -120,6 +121,20 @@ fun SettingsScreen(
                 },
             )
         }
+
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.settings_sleep_fade), Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = sleepFade,
+                onCheckedChange = {
+                    sleepFade = it
+                    settings.sleepFade = it
+                },
+            )
+        }
+        Hint(stringResource(R.string.settings_sleep_fade_note))
 
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

@@ -49,6 +49,31 @@ class CrossfadeController(
 
     private val handler = Handler(Looper.getMainLooper())
 
+    /**
+     * Volume général, de 0 à 1, appliqué par-dessus le fondu : le minuteur de sommeil l'abaisse
+     * sur sa dernière minute sans contredire un fondu en cours.
+     */
+    var volumeScale: Float = 1f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+            // Pendant un fondu, le pas suivant en tient compte.
+            if (!fading) player.volume = field
+        }
+
+    /**
+     * Minuteur réglé sur la fin du morceau : pas de fondu vers le suivant, le lecteur s'arrête au
+     * bout du morceau en cours.
+     */
+    var stopAtTrackEnd: Boolean = false
+        set(value) {
+            field = value
+            if (value) cancelIncoming()
+            player.pauseAtEndOfMediaItems = value
+            evaluate()
+        }
+
+    private fun fadeMs(): Long = if (stopAtTrackEnd) 0L else settings.crossfadeSeconds * 1000L
+
     /** Lecteur de relève, préparé sur le morceau suivant. */
     private var incoming: ExoPlayer? = null
 
@@ -224,7 +249,7 @@ class CrossfadeController(
         watchForTrackEnd()
         if (fading) return
         val delay = CrossfadeRules.nextWatchDelay(
-            fadeMs = settings.crossfadeSeconds * 1000L,
+            fadeMs = fadeMs(),
             durationMs = player.knownDuration(),
             positionMs = player.currentPosition,
             isPlaying = player.isPlaying,
@@ -239,7 +264,7 @@ class CrossfadeController(
     private fun watchForTrackEnd() {
         val duration = player.knownDuration()
         val action = CrossfadeRules.watch(
-            fadeMs = settings.crossfadeSeconds * 1000L,
+            fadeMs = fadeMs(),
             durationMs = duration,
             positionMs = player.currentPosition,
             isPlaying = player.isPlaying,
@@ -334,8 +359,8 @@ class CrossfadeController(
             }
             CrossfadeRules.Fade.Finish -> finishFade()
             is CrossfadeRules.Fade.Volumes -> {
-                next.volume = step.incoming
-                player.volume = step.outgoing
+                next.volume = step.incoming * volumeScale
+                player.volume = step.outgoing * volumeScale
             }
         }
     }
@@ -354,7 +379,7 @@ class CrossfadeController(
         // Le temps écouté jusqu'ici revient au morceau qui se termine.
         stopListening()
         old.removeListener(this)
-        next.volume = 1f
+        next.volume = volumeScale
         player = next
         next.addListener(this)
         resetTrackListening()
@@ -378,8 +403,8 @@ class CrossfadeController(
         if (fading) {
             fading = false
             handler.removeCallbacks(fadeStep)
-            player.pauseAtEndOfMediaItems = false
-            player.volume = 1f
+            player.pauseAtEndOfMediaItems = stopAtTrackEnd
+            player.volume = volumeScale
         }
     }
 

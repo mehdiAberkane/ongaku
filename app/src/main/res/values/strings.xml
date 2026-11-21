@@ -326,4 +326,16 @@
     <string name="widget_tap_play">Appuie sur lecture</string>
     <string name="widget_play_pause">Lecture ou pause</string>
     <string name="widget_nothing_to_play">Aucun morceau à lire.</string>
+    <!-- Minuteur de sommeil -->
+    <string name="sleep_title">Minuteur de sommeil</string>
+    <string name="sleep_track_end">Fin du morceau</string>
+    <string name="sleep_track_end_short">Fin du morceau</string>
+    <string name="sleep_cancel">Arrêter le minuteur</string>
+    <plurals name="sleep_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="many">%1$d minutes</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <string name="settings_sleep_fade">Minuteur de sommeil : baisser le volume sur la dernière minute</string>
+    <string name="settings_sleep_fade_note">Le minuteur se règle depuis l\'écran de lecture, avec l\'icône de lune.</string>
 </resources>

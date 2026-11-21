@@ -69,6 +69,7 @@ class ResumptionCallback(
     private val context: Context,
     private val scope: CoroutineScope,
     private val autoplay: AutoplayGuard,
+    private val sleepTimer: () -> SleepTimer?,
 ) : MediaSession.Callback {
 
     override fun onConnect(
@@ -83,6 +84,7 @@ class ResumptionCallback(
                 .add(QueueCommands.ADD)
                 .add(QueueCommands.MOVE)
                 .add(AutoplayGuard.START)
+                .add(SleepTimer.COMMAND)
                 .build(),
             MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
         )
@@ -98,6 +100,12 @@ class ResumptionCallback(
             val address = AutoplayGuard.address(args)
                 ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
             autoplay.start(address, AutoplayGuard.name(args))
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        if (customCommand.customAction == SleepTimer.COMMAND.customAction) {
+            val timer = sleepTimer()
+                ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_SESSION_DISCONNECTED))
+            timer.handle(args)
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
         val player = session.player as? ExoPlayer
