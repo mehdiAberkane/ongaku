@@ -1,0 +1,319 @@
+// Éléments communs aux écrans : lignes, pochettes, menus d'un morceau, messages.
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package fr.devsecopsforce.ongaku.ui
+
+import androidx.compose.material3.ExperimentalMaterial3Api
+import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import fr.devsecopsforce.ongaku.data.CoverShape
+import fr.devsecopsforce.ongaku.data.Track
+import java.io.File
+
+@Composable
+internal fun BackgroundImage(file: File?, scrim: Brush? = null) {
+    if (file == null) return
+    val appearance = LocalAppearance.current
+    // Le flou et l'assombrissement réglables concernent le fond de l'application, pas l'écran de lecture.
+    val blurRadius = if (scrim == null) appearance.backgroundBlur.dp else 0.dp
+    AsyncImage(
+        model = file,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize().blur(blurRadius),
+    )
+    // Voile pour que le texte reste lisible quelle que soit l'image.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                scrim ?: SolidColor(
+                    MaterialTheme.colorScheme.background.copy(alpha = appearance.backgroundDim),
+                ),
+            ),
+    )
+}
+
+@Composable
+internal fun CenteredMessage(message: String, action: @Composable () -> Unit = {}) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(message, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            action()
+        }
+    }
+}
+
+internal fun countLabel(count: Int) = "$count titre${if (count > 1) "s" else ""}"
+
+/** « 12 titres », ou « 12 titres · 2 introuvables » quand des fichiers ont disparu. */
+internal fun countLabel(ids: Collection<Long>, existingIds: Set<Long>): String {
+    val missing = ids.count { it !in existingIds }
+    val label = countLabel(ids.size - missing)
+    return if (missing == 0) label else "$label · $missing introuvable${if (missing > 1) "s" else ""}"
+}
+
+@Composable
+internal fun TrackRow(
+    track: Track,
+    highlighted: Boolean,
+    actions: TrackActions,
+    extraLabel: String? = null,
+    onClick: () -> Unit,
+) {
+    ListRow(
+        title = track.title,
+        subtitle = listOfNotNull(track.artist, formatTime(track.durationMs), extraLabel)
+            .joinToString(" · "),
+        artworkUri = track.artworkUri,
+        highlighted = highlighted,
+        onClick = onClick,
+        trailing = {
+            FavoriteButton(track.id, actions)
+            TrackMenuButton(track.id, actions)
+        },
+    )
+}
+
+@Composable
+internal fun FavoriteButton(trackId: Long, actions: TrackActions) {
+    val favorite = trackId in actions.data.favorites
+    IconButton(onClick = { actions.toggleFavorite(trackId) }) {
+        Icon(
+            if (favorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            if (favorite) "Retirer des favoris" else "Ajouter aux favoris",
+            tint = if (favorite) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+/** Menu d'un album, d'un artiste ou d'une liste ouverts. */
+@Composable
+internal fun QueueMenuButton(onPlayNext: () -> Unit, onAddToQueue: () -> Unit, onAddToPlaylist: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Rounded.MoreVert, "Options de la liste")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            MenuEntry("Lire ensuite", Icons.AutoMirrored.Rounded.PlaylistPlay) {
+                open = false
+                onPlayNext()
+            }
+            MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
+                open = false
+                onAddToQueue()
+            }
+            MenuEntry("Ajouter à une liste", Icons.AutoMirrored.Rounded.PlaylistAdd) {
+                open = false
+                onAddToPlaylist()
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TrackMenuButton(trackId: Long, actions: TrackActions, queueEntries: Boolean = true) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Rounded.MoreVert, "Options du morceau")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (queueEntries) {
+                MenuEntry("Lire ensuite", Icons.AutoMirrored.Rounded.PlaylistPlay) {
+                    open = false
+                    actions.playNext(trackId)
+                }
+                MenuEntry("Ajouter à la file", Icons.AutoMirrored.Rounded.QueueMusic) {
+                    open = false
+                    actions.addToQueue(trackId)
+                }
+            }
+            MenuEntry("Ajouter à une liste", Icons.AutoMirrored.Rounded.PlaylistAdd) {
+                open = false
+                actions.addToPlaylist(trackId)
+            }
+            actions.removeFromPlaylist?.let { remove ->
+                MenuEntry("Retirer de cette liste", Icons.Rounded.Delete) {
+                    open = false
+                    remove(trackId)
+                }
+            }
+            MenuEntry("Choisir une image de fond", Icons.Rounded.Image) {
+                open = false
+                actions.pickBackground(trackId)
+            }
+            if (trackId in actions.data.trackBackgrounds) {
+                MenuEntry("Retirer l'image de fond", Icons.Rounded.Delete) {
+                    open = false
+                    actions.removeBackground(trackId)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun MenuEntry(text: String, icon: ImageVector, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text) },
+        leadingIcon = { Icon(icon, contentDescription = null) },
+        onClick = onClick,
+    )
+}
+
+@Composable
+internal fun ListRow(
+    title: String,
+    subtitle: String,
+    artworkUri: Uri?,
+    highlighted: Boolean = false,
+    icon: ImageVector = Icons.Rounded.MusicNote,
+    onClick: () -> Unit,
+    trailing: @Composable () -> Unit = {},
+) {
+    val compact = LocalAppearance.current.compactList
+    val verticalPadding = if (compact) 0.dp else 8.dp
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, top = verticalPadding, bottom = verticalPadding, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Artwork(
+            artworkUri,
+            Modifier.size(if (compact) 36.dp else 48.dp),
+            iconSize = if (compact) 18.dp else 24.dp,
+            icon = icon,
+        )
+        Spacer(Modifier.size(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Normal,
+                color = if (highlighted) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                subtitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        trailing()
+    }
+}
+
+@Composable
+internal fun Artwork(
+    uri: Uri?,
+    modifier: Modifier,
+    iconSize: Dp,
+    icon: ImageVector = Icons.Rounded.MusicNote,
+) {
+    val shape = when (LocalAppearance.current.coverShape) {
+        CoverShape.ROUNDED -> RoundedCornerShape(8.dp)
+        CoverShape.CIRCLE -> CircleShape
+        CoverShape.SQUARE -> RectangleShape
+    }
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(iconSize),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (uri != null) {
+            AsyncImage(
+                model = uri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+internal fun formatTime(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}
