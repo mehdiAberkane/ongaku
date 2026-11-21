@@ -13,7 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
-import fr.devsecopsforce.ongaku.ui.AppDataViewModel
+import fr.devsecopsforce.ongaku.ui.AppDataRepository
 import fr.devsecopsforce.ongaku.ui.LockScreenPlayer
 import fr.devsecopsforce.ongaku.ui.OngakuTheme
 import fr.devsecopsforce.ongaku.ui.PlayerViewModel
@@ -28,7 +28,7 @@ import fr.devsecopsforce.ongaku.ui.PlayerViewModel
  */
 class LockScreenActivity : ComponentActivity() {
     private val playerViewModel: PlayerViewModel by viewModels()
-    private val appDataViewModel: AppDataViewModel by viewModels()
+    private val appData by lazy { AppDataRepository.get(this) }
 
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
 
@@ -78,7 +78,7 @@ class LockScreenActivity : ComponentActivity() {
         )
         setContent {
             OngakuTheme {
-                LockScreenPlayer(playerViewModel, appDataViewModel, onUnlock = ::unlock)
+                LockScreenPlayer(playerViewModel, appData, onUnlock = ::unlock)
             }
         }
     }

@@ -1,11 +1,10 @@
 package fr.devsecopsforce.ongaku.ui
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.annotation.StringRes
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
@@ -25,7 +24,9 @@ import java.io.File
 import java.io.IOException
 import java.util.UUID
 import org.json.JSONException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,9 +42,19 @@ sealed interface BackgroundTarget {
     data object Widget : BackgroundTarget
 }
 
-class AppDataViewModel(application: Application) : AndroidViewModel(application) {
-    private val store = AppDataStore(application)
-    private val backgroundsDir = File(application.filesDir, "backgrounds")
+/**
+ * Listes, favoris et images de fond : une seule instance pour tout le processus, comme
+ * [fr.devsecopsforce.ongaku.data.AppearanceStore]. L'écran principal et celui du verrouillage
+ * partagent ainsi le même état : une modification faite dans l'un ne peut pas être écrasée par
+ * l'état en retard de l'autre.
+ *
+ * Les modifications tournent dans [scope], qui vit autant que le processus : fermer un écran
+ * n'interrompt pas un enregistrement en cours.
+ */
+class AppDataRepository private constructor(private val app: Application) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val store = AppDataStore(app)
+    private val backgroundsDir = File(app.filesDir, "backgrounds")
     private val mutex = Mutex()
 
     private val _state = MutableStateFlow(AppData())
@@ -61,14 +72,14 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private val loading = viewModelScope.launch(Dispatchers.IO) {
+    private val loading = scope.launch {
         synchronized(AppDataStore.lock) { reloadIfCorrected() }
         deleteOrphanBackgrounds()
     }
 
     init {
-        // Le fichier a été corrigé pendant que l'écran était ouvert : on le relit.
-        viewModelScope.launch(Dispatchers.IO) {
+        // Le fichier a été corrigé par la mise à jour des identifiants : on le relit.
+        scope.launch {
             LibraryIdentity.generation.collect {
                 loading.join()
                 mutex.withLock { synchronized(AppDataStore.lock) { reloadIfCorrected() } }
@@ -79,7 +90,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
     fun backgroundFile(name: String?): File? = name?.let { File(backgroundsDir, it) }
 
     private fun mutate(transform: (AppData) -> AppData) {
-        viewModelScope.launch(Dispatchers.IO) { applyChange(transform) }
+        scope.launch { applyChange(transform) }
     }
 
     private suspend fun applyChange(transform: (AppData) -> AppData) {
@@ -112,7 +123,6 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun toast(@StringRes message: Int, vararg args: Any) = withContext(Dispatchers.Main) {
-        val app = getApplication<Application>()
         Toast.makeText(app, app.getString(message, *args), Toast.LENGTH_SHORT).show()
     }
 
@@ -131,7 +141,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
      * listes par nom). Vérifié ici aussi, l'écran pouvant afficher un état en retard.
      */
     private fun mutateNamed(name: String, exceptId: String?, transform: (AppData) -> AppData) {
-        viewModelScope.launch(Dispatchers.IO) {
+        scope.launch {
             var taken = false
             applyChange { data ->
                 if (PlaylistEdits.isNameTaken(data.playlists, name, exceptId)) {
@@ -183,11 +193,11 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun exportBackup(target: Uri, tracks: List<Track>) {
-        viewModelScope.launch(Dispatchers.IO) {
+        scope.launch {
             loading.join()
             try {
                 val text = PlaylistBackup.serialize(_state.value, tracks)
-                val output = getApplication<Application>().contentResolver.openOutputStream(target)
+                val output = app.contentResolver.openOutputStream(target)
                     ?: throw IOException("destination inaccessible")
                 output.use { it.write(text.toByteArray(Charsets.UTF_8)) }
                 toast(R.string.backup_exported)
@@ -201,9 +211,9 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
 
     /** Fusionne la sauvegarde avec l'existant : un import n'efface jamais rien. */
     fun importBackup(source: Uri, tracks: List<Track>) {
-        viewModelScope.launch(Dispatchers.IO) {
+        scope.launch {
             val imported = try {
-                val input = getApplication<Application>().contentResolver.openInputStream(source)
+                val input = app.contentResolver.openInputStream(source)
                     ?: throw IOException("fichier illisible")
                 val bytes = input.use { ImportLimits.readLimited(it, ImportLimits.MAX_BACKUP_BYTES) }
                 if (bytes == null) {
@@ -225,7 +235,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                 PlaylistBackup.merge(data, imported) { UUID.randomUUID().toString() }
             }
             val missing = if (imported.missingTracks > 0) {
-                getApplication<Application>().getString(R.string.backup_import_missing, imported.missingTracks)
+                app.getString(R.string.backup_import_missing, imported.missingTracks)
             } else {
                 ""
             }
@@ -239,10 +249,10 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
      * l'écran : une photo de 50 Mo ne s'installe pas telle quelle dans le stockage de l'application.
      */
     fun setBackground(target: BackgroundTarget, source: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
+        scope.launch {
             val name = "${UUID.randomUUID()}.img"
             val saved = try {
-                val bytes = BackgroundImage.prepare(getApplication(), source)
+                val bytes = BackgroundImage.prepare(app, source)
                 if (bytes == null) {
                     toast(R.string.background_not_image)
                     false
@@ -267,7 +277,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
 
     /** Retire les images des morceaux qui ne sont plus sur le téléphone, et leurs fichiers. */
     fun removeMissingBackgrounds(existing: Set<Long>) {
-        viewModelScope.launch(Dispatchers.IO) {
+        scope.launch {
             var removed = emptyMap<Long, String>()
             var stillUsed = emptySet<String>()
             applyChange { data ->
@@ -277,7 +287,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
             removed.values.filterNot { it in stillUsed }.forEach { backgroundFile(it)?.delete() }
-            WidgetDisplay.render(getApplication())
+            WidgetDisplay.render(app)
         }
     }
 
@@ -291,7 +301,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun removeBackground(target: BackgroundTarget) {
-        viewModelScope.launch(Dispatchers.IO) { replaceBackground(target, null) }
+        scope.launch { replaceBackground(target, null) }
     }
 
     private suspend fun replaceBackground(target: BackgroundTarget, name: String?) {
@@ -324,11 +334,18 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         }
         backgroundFile(previous)?.delete()
         // Toutes ces images peuvent apparaître dans le widget : il se redessine aussitôt.
-        WidgetDisplay.render(getApplication())
+        WidgetDisplay.render(app)
     }
 
-    private companion object {
+    companion object {
         /** Une image en cours d'enregistrement n'est inscrite dans les données qu'à la fin. */
-        const val ORPHAN_MIN_AGE_MS = 60L * 60 * 1000
+        private const val ORPHAN_MIN_AGE_MS = 60L * 60 * 1000
+
+        @Volatile
+        private var instance: AppDataRepository? = null
+
+        fun get(context: Context): AppDataRepository = instance ?: synchronized(this) {
+            instance ?: AppDataRepository(context.applicationContext as Application).also { instance = it }
+        }
     }
 }

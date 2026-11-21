@@ -92,11 +92,11 @@ import kotlin.math.roundToInt
 @Composable
 fun LockScreenPlayer(
     playerViewModel: PlayerViewModel,
-    appDataViewModel: AppDataViewModel,
+    appData: AppDataRepository,
     onUnlock: () -> Unit,
 ) {
     val player by playerViewModel.state.collectAsStateWithLifecycle()
-    val data by appDataViewModel.state.collectAsStateWithLifecycle()
+    val data by appData.state.collectAsStateWithLifecycle()
     val trackId = player.current?.mediaId?.toLongOrNull()
     ArtworkAccentEffect(player.current?.mediaMetadata?.artworkUri)
     FullPlayer(
@@ -104,7 +104,7 @@ fun LockScreenPlayer(
         viewModel = playerViewModel,
         trackId = trackId,
         actions = null,
-        background = appDataViewModel.backgroundFile(playerBackgroundName(data, trackId)),
+        background = appData.backgroundFile(playerBackgroundName(data, trackId)),
         onClose = onUnlock,
         onLockScreen = true,
     )
