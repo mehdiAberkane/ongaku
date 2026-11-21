@@ -6,6 +6,7 @@ package fr.devsecopsforce.ongaku.playback
 import android.content.Context
 import android.os.Bundle
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -67,6 +68,7 @@ object ResumeQueue {
 class ResumptionCallback(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val autoplay: AutoplayGuard,
 ) : MediaSession.Callback {
 
     override fun onConnect(
@@ -80,6 +82,7 @@ class ResumptionCallback(
             MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(QueueCommands.ADD)
                 .add(QueueCommands.MOVE)
+                .add(AutoplayGuard.START)
                 .build(),
             MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
         )
@@ -91,11 +94,29 @@ class ResumptionCallback(
         customCommand: SessionCommand,
         args: Bundle,
     ): ListenableFuture<SessionResult> {
+        if (customCommand.customAction == AutoplayGuard.START.customAction) {
+            val address = AutoplayGuard.address(args)
+                ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+            autoplay.start(address, AutoplayGuard.name(args))
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
         val player = session.player as? ExoPlayer
         val handled = player != null && QueueCommands.apply(player, customCommand, args)
         return Futures.immediateFuture(
             SessionResult(if (handled) SessionResult.RESULT_SUCCESS else SessionError.ERROR_NOT_SUPPORTED),
         )
+    }
+
+    /** Signale à la surveillance de la lecture automatique qui met en pause ou relance. */
+    override fun onPlayerCommandRequest(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        playerCommand: Int,
+    ): Int {
+        if (playerCommand == Player.COMMAND_PLAY_PAUSE || playerCommand == Player.COMMAND_STOP) {
+            autoplay.onPlayPauseRequest(controller.packageName)
+        }
+        return super.onPlayerCommandRequest(session, controller, playerCommand)
     }
 
     override fun onPlaybackResumption(

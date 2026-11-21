@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,10 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
+import fr.devsecopsforce.ongaku.playback.AutoplayJournal
 
 private data class PairedDevice(val address: String, val name: String)
 
@@ -98,7 +102,11 @@ internal fun BluetoothAutoplaySection(settings: PlaybackSettings) {
         Hint("Aucun appareil associé. Active le Bluetooth et associe ton appareil dans les paramètres d'Android.")
         return
     }
-    Hint("La lecture reprend quand l'un de ces appareils se connecte.")
+    Hint(
+        "La lecture reprend quand l'un de ces appareils se connecte, dès que le son peut sortir vers lui. " +
+            "Si l'appareil la coupe en démarrant (un autoradio, par exemple), elle est relancée pendant 40 secondes, " +
+            "sauf si tu la mets en pause dans Ongaku.",
+    )
     devices.forEach { device ->
         val checked = device.address in selected
         val toggle = {
@@ -115,4 +123,40 @@ internal fun BluetoothAutoplaySection(settings: PlaybackSettings) {
             Text(device.name)
         }
     }
+    Spacer(Modifier.height(8.dp))
+    AutoplayJournalView()
 }
+
+/**
+ * Dernières étapes de la lecture automatique : quand elle rate dans la voiture, on voit si la
+ * connexion est arrivée, si la sortie audio était prête, et si la lecture a été relancée.
+ */
+@Composable
+private fun AutoplayJournalView() {
+    val context = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    var entries by remember { mutableStateOf(AutoplayJournal.entries(context)) }
+    LifecycleResumeEffect(Unit) {
+        entries = AutoplayJournal.entries(context)
+        onPauseOrDispose { }
+    }
+    TextButton(onClick = { open = !open }) {
+        Text(if (open) "Masquer le journal" else "Journal de la lecture automatique (${entries.size})")
+    }
+    if (!open) return
+    if (entries.isEmpty()) {
+        Hint("Rien pour l'instant : le journal se remplit à la prochaine connexion d'un appareil choisi.")
+        return
+    }
+    entries.take(SHOWN_ENTRIES).forEach { entry ->
+        Text(entry, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+    }
+    TextButton(
+        onClick = {
+            AutoplayJournal.clear(context)
+            entries = emptyList()
+        },
+    ) { Text("Effacer le journal") }
+}
+
+private const val SHOWN_ENTRIES = 25

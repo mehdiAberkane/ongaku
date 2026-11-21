@@ -1,6 +1,3 @@
-// Media3 marque certaines API comme instables (susceptibles de changer d'une version à l'autre).
-@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package fr.devsecopsforce.ongaku.playback
 
 import android.bluetooth.BluetoothA2dp
@@ -10,19 +7,21 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
-/** Reprend la lecture quand un appareil audio choisi dans les réglages se connecte. */
+/**
+ * Reprend la lecture quand un appareil audio choisi dans les réglages se connecte. Attend que le son
+ * puisse vraiment sortir vers lui, puis confie la lecture et sa surveillance au service
+ * ([AutoplayGuard]) : un autoradio met plus de temps à démarrer que le téléphone.
+ */
 class BluetoothAutoplayReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -37,12 +36,35 @@ class BluetoothAutoplayReceiver : BroadcastReceiver() {
         if (!settings.bluetoothAutoplay || device.address !in settings.bluetoothDevices) return
 
         val app = context.applicationContext
+        val name = deviceName(device)
+        AutoplayJournal.add(app, "connexion de $name reçue")
         val pending = goAsync()
-        // Sans ce délai, le début du morceau peut sortir sur le haut-parleur du téléphone.
-        Handler(Looper.getMainLooper()).postDelayed({ resume(app, pending) }, ROUTING_DELAY_MS)
+        waitForRoute(app, device.address, name, SystemClock.elapsedRealtime(), pending)
     }
 
-    private fun resume(app: Context, pending: PendingResult) {
+    /**
+     * Sans sortie audio prête, la lecture partirait sur le haut-parleur du téléphone ou se perdrait :
+     * on attend qu'elle apparaisse, au plus [AutoplayRules.ROUTE_TIMEOUT_MS].
+     */
+    private fun waitForRoute(app: Context, address: String, name: String, since: Long, pending: PendingResult) {
+        val waited = SystemClock.elapsedRealtime() - since
+        when {
+            AutoplayGuard.routedTo(app, address) -> {
+                AutoplayJournal.add(app, "sortie audio prête après ${"%.1f".format(waited / 1000.0)} s")
+                start(app, address, name, pending)
+            }
+            waited >= AutoplayRules.ROUTE_TIMEOUT_MS -> {
+                AutoplayJournal.add(app, "sortie audio pas prête après ${waited / 1000} s : lecture tentée quand même")
+                start(app, address, name, pending)
+            }
+            else -> Handler(Looper.getMainLooper()).postDelayed(
+                { waitForRoute(app, address, name, since, pending) },
+                AutoplayRules.ROUTE_POLL_MS,
+            )
+        }
+    }
+
+    private fun start(app: Context, address: String, name: String, pending: PendingResult) {
         val future = MediaController.Builder(
             app,
             SessionToken(app, ComponentName(app, PlaybackService::class.java)),
@@ -51,40 +73,26 @@ class BluetoothAutoplayReceiver : BroadcastReceiver() {
             {
                 val controller = runCatching { future.get() }.getOrNull()
                 if (controller == null) {
+                    AutoplayJournal.add(app, "lecteur injoignable")
                     pending.finish()
                     return@addListener
                 }
-                CoroutineScope(Dispatchers.Main).launch {
-                    try {
-                        // Une lecture déjà en cours n'est jamais interrompue ni déplacée.
-                        if (!controller.isPlaying) {
-                            if (controller.mediaItemCount == 0) {
-                                val queue = ResumeQueue.load(app)
-                                controller.setMediaItems(queue.mediaItems, queue.startIndex, queue.startPositionMs)
-                            }
-                            controller.prepare()
-                            controller.play()
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Lecture automatique impossible", e)
-                    }
-                    // Laisse à la commande le temps d'arriver au lecteur avant de se déconnecter.
-                    Handler(Looper.getMainLooper()).postDelayed(
-                        {
-                            controller.release()
-                            pending.finish()
-                        },
-                        RELEASE_DELAY_MS,
-                    )
-                }
+                val result = controller.sendCustomCommand(AutoplayGuard.START, AutoplayGuard.startArgs(address, name))
+                result.addListener(
+                    {
+                        controller.release()
+                        pending.finish()
+                    },
+                    ContextCompat.getMainExecutor(app),
+                )
             },
             ContextCompat.getMainExecutor(app),
         )
     }
 
-    private companion object {
-        const val TAG = "OngakuBluetooth"
-        const val ROUTING_DELAY_MS = 1500L
-        const val RELEASE_DELAY_MS = 500L
+    private fun deviceName(device: BluetoothDevice): String = try {
+        (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) device.alias else device.name) ?: device.address
+    } catch (e: SecurityException) {
+        device.address
     }
 }
