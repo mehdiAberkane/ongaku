@@ -14,6 +14,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
   parcourir vite les longues listes.
 - **Lecture** : file d'attente, lecture aléatoire, répétition, fondu enchaîné réglable, pause quand
   les écouteurs sont débranchés, reprise de la dernière file au redémarrage.
+- **Minuteur de sommeil** : arrêt après 15, 30, 45 ou 60 minutes, ou à la fin du morceau, réglé
+  depuis l'écran de lecture ; le volume baisse sur la dernière minute (désactivable dans les réglages).
 - **Lecture automatique en Bluetooth** : la musique reprend quand un appareil choisi se connecte.
 - **Écran de verrouillage** : écran de lecture affiché par-dessus le verrouillage, sans accès à la
   bibliothèque ni aux réglages. Son bouton « Déverrouiller » ouvre le déverrouillage d'Android
