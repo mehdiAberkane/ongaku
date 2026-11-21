@@ -27,10 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.playback.AutoplayJournal
 
@@ -79,7 +81,7 @@ internal fun BluetoothAutoplaySection(settings: PlaybackSettings) {
     }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Lecture automatique en Bluetooth", Modifier.weight(1f))
+        Text(stringResource(R.string.autoplay_setting), Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
         Switch(
             checked = enabled,
@@ -94,19 +96,15 @@ internal fun BluetoothAutoplaySection(settings: PlaybackSettings) {
 
     Spacer(Modifier.height(4.dp))
     if (!permitted) {
-        Hint("Il manque l'autorisation Android « Appareils à proximité ». Elle ne donne aucun accès à tes fichiers.")
-        OutlinedButton(onClick = requestPermission) { Text("Autoriser") }
+        Hint(stringResource(R.string.autoplay_permission_missing))
+        OutlinedButton(onClick = requestPermission) { Text(stringResource(R.string.common_allow)) }
         return
     }
     if (devices.isEmpty()) {
-        Hint("Aucun appareil associé. Active le Bluetooth et associe ton appareil dans les paramètres d'Android.")
+        Hint(stringResource(R.string.autoplay_no_device))
         return
     }
-    Hint(
-        "La lecture reprend quand l'un de ces appareils se connecte, dès que le son peut sortir vers lui. " +
-            "Si l'appareil la coupe en démarrant (un autoradio, par exemple), elle est relancée pendant 40 secondes, " +
-            "sauf si tu la mets en pause dans Ongaku.",
-    )
+    Hint(stringResource(R.string.autoplay_note))
     devices.forEach { device ->
         val checked = device.address in selected
         val toggle = {
@@ -141,11 +139,17 @@ private fun AutoplayJournalView() {
         onPauseOrDispose { }
     }
     TextButton(onClick = { open = !open }) {
-        Text(if (open) "Masquer le journal" else "Journal de la lecture automatique (${entries.size})")
+        Text(
+            if (open) {
+                stringResource(R.string.autoplay_journal_hide)
+            } else {
+                stringResource(R.string.autoplay_journal_show, entries.size)
+            },
+        )
     }
     if (!open) return
     if (entries.isEmpty()) {
-        Hint("Rien pour l'instant : le journal se remplit à la prochaine connexion d'un appareil choisi.")
+        Hint(stringResource(R.string.autoplay_journal_empty))
         return
     }
     entries.take(SHOWN_ENTRIES).forEach { entry ->
@@ -156,7 +160,7 @@ private fun AutoplayJournalView() {
             AutoplayJournal.clear(context)
             entries = emptyList()
         },
-    ) { Text("Effacer le journal") }
+    ) { Text(stringResource(R.string.autoplay_journal_clear)) }
 }
 
 private const val SHOWN_ENTRIES = 25

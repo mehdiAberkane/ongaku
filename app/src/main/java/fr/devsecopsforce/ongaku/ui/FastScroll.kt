@@ -30,11 +30,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fr.devsecopsforce.ongaku.R
 import kotlinx.coroutines.launch
 
 /** En dessous, la liste se parcourt assez vite au doigt : pas besoin d'index. */
@@ -91,6 +93,7 @@ private fun AlphabetBar(
     val haptics = LocalHapticFeedback.current
     var heightPx by remember { mutableIntStateOf(1) }
     var current by remember { mutableStateOf<Char?>(null) }
+    val indexDescription = stringResource(R.string.fast_scroll_index)
 
     fun select(y: Float) {
         val index = (y / heightPx * letters.size).toInt().coerceIn(0, letters.lastIndex)
@@ -108,7 +111,7 @@ private fun AlphabetBar(
             .width(24.dp)
             .padding(vertical = 4.dp)
             .onSizeChanged { heightPx = it.height.coerceAtLeast(1) }
-            .semantics { contentDescription = "Index alphabétique" }
+            .semantics { contentDescription = indexDescription }
             .pointerInput(letters) {
                 awaitEachGesture {
                     val down = awaitFirstDown()

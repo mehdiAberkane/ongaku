@@ -3,8 +3,10 @@ package fr.devsecopsforce.ongaku.ui
 import android.app.Application
 import android.net.Uri
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
 import fr.devsecopsforce.ongaku.data.BackgroundImage
@@ -95,7 +97,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                     false
                 }
             }
-            if (!saved) toast("Enregistrement impossible.")
+            if (!saved) toast(R.string.data_save_failed)
         }
     }
 
@@ -109,8 +111,9 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
         playlist.copy(trackIds = playlist.trackIds.filter { it in existing })
     }
 
-    private suspend fun toast(message: String) = withContext(Dispatchers.Main) {
-        Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
+    private suspend fun toast(@StringRes message: Int, vararg args: Any) = withContext(Dispatchers.Main) {
+        val app = getApplication<Application>()
+        Toast.makeText(app, app.getString(message, *args), Toast.LENGTH_SHORT).show()
     }
 
     fun toggleFavorite(trackId: Long) = mutate { data ->
@@ -138,7 +141,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                     transform(data)
                 }
             }
-            if (taken) toast("Une liste « ${name.trim()} » existe déjà.")
+            if (taken) toast(R.string.data_playlist_name_exists, name.trim())
         }
     }
 
@@ -187,11 +190,11 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                 val output = getApplication<Application>().contentResolver.openOutputStream(target)
                     ?: throw IOException("destination inaccessible")
                 output.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-                toast("Sauvegarde exportée.")
+                toast(R.string.backup_exported)
             } catch (e: IOException) {
-                toast("Export impossible.")
+                toast(R.string.backup_export_failed)
             } catch (e: SecurityException) {
-                toast("Export impossible.")
+                toast(R.string.backup_export_failed)
             }
         }
     }
@@ -204,29 +207,29 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                     ?: throw IOException("fichier illisible")
                 val bytes = input.use { ImportLimits.readLimited(it, ImportLimits.MAX_BACKUP_BYTES) }
                 if (bytes == null) {
-                    toast("Fichier trop lourd pour une sauvegarde Ongaku (plus de 5 Mo).")
+                    toast(R.string.backup_too_large)
                     return@launch
                 }
                 PlaylistBackup.parse(String(bytes, Charsets.UTF_8), tracks)
             } catch (e: JSONException) {
-                toast("Ce fichier n'est pas une sauvegarde Ongaku.")
+                toast(R.string.backup_not_ongaku)
                 return@launch
             } catch (e: IOException) {
-                toast("Lecture du fichier impossible.")
+                toast(R.string.backup_read_failed)
                 return@launch
             } catch (e: SecurityException) {
-                toast("Lecture du fichier impossible.")
+                toast(R.string.backup_read_failed)
                 return@launch
             }
             applyChange { data ->
                 PlaylistBackup.merge(data, imported) { UUID.randomUUID().toString() }
             }
             val missing = if (imported.missingTracks > 0) {
-                ", ${imported.missingTracks} morceau(x) introuvable(s)"
+                getApplication<Application>().getString(R.string.backup_import_missing, imported.missingTracks)
             } else {
                 ""
             }
-            toast("Import terminé : ${imported.playlists.size} liste(s)$missing.")
+            toast(R.string.backup_import_done, imported.playlists.size, missing)
         }
     }
 
@@ -241,7 +244,7 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
             val saved = try {
                 val bytes = BackgroundImage.prepare(getApplication(), source)
                 if (bytes == null) {
-                    toast("Ce fichier n'est pas une image lisible.")
+                    toast(R.string.background_not_image)
                     false
                 } else {
                     backgroundsDir.mkdirs()
@@ -249,13 +252,13 @@ class AppDataViewModel(application: Application) : AndroidViewModel(application)
                     true
                 }
             } catch (e: IOException) {
-                toast("Impossible de copier cette image.")
+                toast(R.string.background_copy_failed)
                 false
             } catch (e: SecurityException) {
-                toast("Impossible de lire cette image.")
+                toast(R.string.background_read_failed)
                 false
             } catch (e: OutOfMemoryError) {
-                toast("Image trop grande.")
+                toast(R.string.background_too_large)
                 false
             }
             if (saved) replaceBackground(target, name)

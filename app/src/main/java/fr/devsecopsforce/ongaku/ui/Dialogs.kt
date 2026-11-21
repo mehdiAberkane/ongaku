@@ -19,8 +19,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
 
@@ -35,7 +37,7 @@ internal fun AddToPlaylistDialog(
     var creating by remember { mutableStateOf(playlists.isEmpty()) }
     if (creating) {
         NameDialog(
-            title = "Nouvelle liste",
+            title = stringResource(R.string.playlist_new),
             initial = "",
             taken = { PlaylistEdits.isNameTaken(playlists, it) },
             onConfirm = onCreate,
@@ -45,7 +47,15 @@ internal fun AddToPlaylistDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (trackCount > 1) "Ajouter ${countLabel(trackCount)} à une liste" else "Ajouter à une liste") },
+        title = {
+            Text(
+                if (trackCount > 1) {
+                    stringResource(R.string.dialog_add_tracks_to_playlist, countLabel(trackCount))
+                } else {
+                    stringResource(R.string.menu_add_to_playlist)
+                },
+            )
+        },
         text = {
             LazyColumn {
                 items(playlists, key = { it.id }) { playlist ->
@@ -60,9 +70,9 @@ internal fun AddToPlaylistDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { creating = true }) { Text("Nouvelle liste") }
+            TextButton(onClick = { creating = true }) { Text(stringResource(R.string.playlist_new)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -85,10 +95,10 @@ internal fun NameDialog(
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                label = { Text("Nom") },
+                label = { Text(stringResource(R.string.dialog_name)) },
                 isError = duplicate,
                 supportingText = if (duplicate) {
-                    { Text("Une liste porte déjà ce nom.") }
+                    { Text(stringResource(R.string.dialog_name_taken)) }
                 } else {
                     null
                 },
@@ -96,9 +106,9 @@ internal fun NameDialog(
         },
         confirmButton = {
             TextButton(enabled = name.isNotBlank() && !duplicate, onClick = { onConfirm(name) }) {
-                Text("Valider")
+                Text(stringResource(R.string.dialog_confirm))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }

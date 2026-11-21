@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Density
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.Appearance
 import fr.devsecopsforce.ongaku.data.AppearanceStore
 import fr.devsecopsforce.ongaku.data.ThemeMode
@@ -223,15 +224,16 @@ fun colorToHue(color: Int): Float {
     return hsl[0]
 }
 
+/** Couleurs proposées : nom (ressource texte) et couleur ARGB. */
 val AccentPresets = listOf(
-    "Indigo" to Color(0xFF5C6BC0),
-    "Bleu" to Color(0xFF2196F3),
-    "Turquoise" to Color(0xFF009688),
-    "Vert" to Color(0xFF4CAF50),
-    "Ambre" to Color(0xFFFFB300),
-    "Orange" to Color(0xFFFF7043),
-    "Rouge" to Color(0xFFE53935),
-    "Rose" to Color(0xFFEC407A),
-    "Violet" to Color(0xFF8E24AA),
-    "Gris" to Color(0xFF78909C),
+    R.string.appearance_color_indigo to Color(0xFF5C6BC0),
+    R.string.appearance_color_blue to Color(0xFF2196F3),
+    R.string.appearance_color_teal to Color(0xFF009688),
+    R.string.appearance_color_green to Color(0xFF4CAF50),
+    R.string.appearance_color_amber to Color(0xFFFFB300),
+    R.string.appearance_color_orange to Color(0xFFFF7043),
+    R.string.appearance_color_red to Color(0xFFE53935),
+    R.string.appearance_color_pink to Color(0xFFEC407A),
+    R.string.appearance_color_purple to Color(0xFF8E24AA),
+    R.string.appearance_color_grey to Color(0xFF78909C),
 ).map { (name, color) -> name to color.toArgb() }

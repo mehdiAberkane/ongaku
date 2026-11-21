@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -81,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.CoverShape
 import fr.devsecopsforce.ongaku.playback.QueueOrder
 import java.io.File
@@ -144,12 +146,12 @@ internal fun MiniPlayer(
             IconButton(onClick = onPlayPause, modifier = Modifier.size(52.dp)) {
                 Icon(
                     if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    if (player.isPlaying) "Pause" else "Lecture",
+                    stringResource(if (player.isPlaying) R.string.player_pause else R.string.player_play),
                     Modifier.size(34.dp),
                 )
             }
             IconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Rounded.SkipNext, "Suivant", Modifier.size(30.dp))
+                Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next), Modifier.size(30.dp))
             }
         }
     }
@@ -198,18 +200,18 @@ internal fun FullPlayer(
                         TextButton(onClick = onClose) {
                             Icon(Icons.Rounded.LockOpen, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Déverrouiller")
+                            Text(stringResource(R.string.player_unlock))
                         }
                     } else {
                         IconButton(onClick = onClose) {
-                            Icon(Icons.Rounded.KeyboardArrowDown, "Fermer")
+                            Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_close))
                         }
                     }
                     Spacer(Modifier.weight(1f))
                     if (trackId != null && actions != null) {
                         FavoriteButton(trackId, actions)
                         IconButton(onClick = { queueOpen = true }) {
-                            Icon(Icons.AutoMirrored.Rounded.QueueMusic, "File d'attente")
+                            Icon(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue))
                         }
                         // Le morceau en cours : « Lire ensuite » n'aurait pas de sens.
                         TrackMenuButton(trackId, actions, queueEntries = false)
@@ -254,22 +256,22 @@ internal fun FullPlayer(
                 ) {
                     ToggleButton(
                         Icons.Rounded.Shuffle,
-                        "Lecture aléatoire",
+                        stringResource(R.string.player_shuffle),
                         player.shuffle,
                         viewModel::toggleShuffle,
                     )
                     IconButton(onClick = viewModel::previous) {
-                        Icon(Icons.Rounded.SkipPrevious, "Précédent", Modifier.size(36.dp))
+                        Icon(Icons.Rounded.SkipPrevious, stringResource(R.string.player_previous), Modifier.size(36.dp))
                     }
                     FilledIconButton(onClick = viewModel::togglePlayPause, Modifier.size(64.dp)) {
                         Icon(
                             if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            if (player.isPlaying) "Pause" else "Lecture",
+                            stringResource(if (player.isPlaying) R.string.player_pause else R.string.player_play),
                             Modifier.size(36.dp),
                         )
                     }
                     IconButton(onClick = viewModel::next) {
-                        Icon(Icons.Rounded.SkipNext, "Suivant", Modifier.size(36.dp))
+                        Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next), Modifier.size(36.dp))
                     }
                     ToggleButton(
                         if (player.repeatMode == Player.REPEAT_MODE_ONE) {
@@ -277,7 +279,7 @@ internal fun FullPlayer(
                         } else {
                             Icons.Rounded.Repeat
                         },
-                        "Répétition",
+                        stringResource(R.string.player_repeat),
                         player.repeatMode != Player.REPEAT_MODE_OFF,
                         viewModel::cycleRepeat,
                     )
@@ -325,16 +327,16 @@ internal fun QueueSheet(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "File d'attente · ${countLabel(player.queue.size)}",
+                stringResource(R.string.queue_title, countLabel(player.queue.size)),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
             if (onAddToPlaylist != null) {
                 TextButton(
                     onClick = { onAddToPlaylist(base.mapNotNull { player.queue.getOrNull(it)?.mediaId?.toLongOrNull() }) },
-                ) { Text("Enregistrer") }
+                ) { Text(stringResource(R.string.queue_save)) }
             }
-            TextButton(onClick = { confirmClear = true }, enabled = player.queue.size > 1) { Text("Vider") }
+            TextButton(onClick = { confirmClear = true }, enabled = player.queue.size > 1) { Text(stringResource(R.string.queue_clear)) }
         }
         LazyColumn(state = listState) {
             itemsIndexed(shown, key = { _, index -> index }) { position, index ->
@@ -366,12 +368,12 @@ internal fun QueueSheet(
                         trailing = {
                             if (index != player.currentIndex) {
                                 IconButton(onClick = { viewModel.removeFromQueue(index) }) {
-                                    Icon(Icons.Rounded.Close, "Retirer de la file")
+                                    Icon(Icons.Rounded.Close, stringResource(R.string.queue_remove))
                                 }
                             }
                             Icon(
                                 Icons.Rounded.DragHandle,
-                                "Déplacer",
+                                stringResource(R.string.library_move),
                                 modifier = Modifier
                                     .padding(horizontal = 12.dp)
                                     .pointerInput(index) {
@@ -415,17 +417,17 @@ internal fun QueueSheet(
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Vider la file ?") },
-            text = { Text("Seul le morceau en cours reste dans la file.") },
+            title = { Text(stringResource(R.string.queue_clear_title)) },
+            text = { Text(stringResource(R.string.queue_clear_text)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.clearQueue()
                         confirmClear = false
                     },
-                ) { Text("Vider") }
+                ) { Text(stringResource(R.string.queue_clear)) }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Annuler") } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }
@@ -474,7 +476,7 @@ internal fun PlayerCover(uri: Uri?) {
     }
     AsyncImage(
         model = uri,
-        contentDescription = "Pochette",
+        contentDescription = stringResource(R.string.player_cover),
         contentScale = ContentScale.Crop,
         onSuccess = { loaded = true },
         onError = { loaded = false },

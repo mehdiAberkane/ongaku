@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.playback.PlaybackService
 import fr.devsecopsforce.ongaku.playback.ResumeQueue
 import kotlinx.coroutines.CoroutineScope
@@ -60,7 +61,7 @@ class WidgetActionReceiver : BroadcastReceiver() {
                             if (action == ACTION_NEXT) controller.seekToNextMediaItem()
                         } catch (e: Exception) {
                             Log.w(TAG, "Reprise impossible", e)
-                            Toast.makeText(app, "Aucun morceau à lire.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(app, R.string.widget_nothing_to_play, Toast.LENGTH_SHORT).show()
                         }
                         finish()
                     }

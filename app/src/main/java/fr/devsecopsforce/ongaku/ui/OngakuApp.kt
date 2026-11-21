@@ -54,10 +54,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
@@ -116,6 +120,8 @@ fun OngakuApp(
     appDataViewModel: AppDataViewModel,
 ) {
     val context = LocalContext.current
+    // Textes lus hors composition (messages des clics) : suivent la configuration en cours.
+    val resources = LocalResources.current
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, audioPermission) ==
@@ -131,9 +137,9 @@ fun OngakuApp(
     }
 
     if (!granted) {
-        CenteredMessage("Ongaku a besoin d'accéder à ta musique pour la lire.") {
+        CenteredMessage(stringResource(R.string.main_permission_needed)) {
             Button(onClick = { launcher.launch(audioPermission) }) {
-                Text("Autoriser l'accès")
+                Text(stringResource(R.string.main_permission_allow))
             }
         }
         return
@@ -178,8 +184,9 @@ fun OngakuApp(
     val allTracksById = remember(library.allTracks) { library.allTracks.associateBy { it.id } }
     val enqueue: (List<Track>, Boolean) -> Unit = { tracks, next ->
         if (next) playerViewModel.playNext(tracks) else playerViewModel.addToQueue(tracks)
-        val what = tracks.singleOrNull()?.title ?: "${tracks.size} titres"
-        Toast.makeText(context, if (next) "Lu ensuite : $what" else "Ajouté à la file : $what", Toast.LENGTH_SHORT).show()
+        val what = tracks.singleOrNull()?.title ?: resources.getString(R.string.queue_n_tracks, tracks.size)
+        val message = resources.getString(if (next) R.string.queue_toast_play_next else R.string.queue_toast_added, what)
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
     val identityReport by LibraryIdentity.pendingReport.collectAsStateWithLifecycle()
     val dataNotice by AppDataStore.pendingNotice.collectAsStateWithLifecycle()
@@ -230,15 +237,15 @@ fun OngakuApp(
     }
     val detailTitle = when (currentDetail) {
         is Detail.Group -> currentDetail.group.title
-        Detail.Search -> "Rechercher"
-        Detail.Favorites -> "Favoris"
-        Detail.RecentlyAdded -> "Ajouts récents"
-        Detail.Top50 -> "Top 50"
+        Detail.Search -> stringResource(R.string.main_title_search)
+        Detail.Favorites -> stringResource(R.string.main_title_favorites)
+        Detail.RecentlyAdded -> stringResource(R.string.main_title_recent)
+        Detail.Top50 -> stringResource(R.string.main_title_top50)
         is Detail.PlaylistDetail -> currentPlaylist?.name.orEmpty()
-        Detail.Settings -> "Réglages"
-        Detail.Stats -> "Informations"
-        Detail.Appearance -> "Apparence"
-        null -> "Ongaku"
+        Detail.Settings -> stringResource(R.string.main_title_settings)
+        Detail.Stats -> stringResource(R.string.main_title_stats)
+        Detail.Appearance -> stringResource(R.string.main_title_appearance)
+        null -> stringResource(R.string.app_name)
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -256,7 +263,7 @@ fun OngakuApp(
                     navigationIcon = {
                         if (currentDetail != null) {
                             IconButton(onClick = goBack) {
-                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Retour")
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.common_back))
                             }
                         }
                     },
@@ -277,23 +284,23 @@ fun OngakuApp(
                         }
                         if (currentPlaylist != null) {
                             IconButton(onClick = { renamingPlaylist = currentPlaylist }) {
-                                Icon(Icons.Rounded.Edit, "Renommer la liste")
+                                Icon(Icons.Rounded.Edit, stringResource(R.string.main_rename_playlist))
                             }
                             IconButton(onClick = { deletingPlaylist = currentPlaylist }) {
-                                Icon(Icons.Rounded.Delete, "Supprimer la liste")
+                                Icon(Icons.Rounded.Delete, stringResource(R.string.main_delete_playlist))
                             }
                         } else if (currentDetail == null) {
                             IconButton(onClick = { detail = Detail.Search }) {
-                                Icon(Icons.Rounded.Search, "Rechercher")
+                                Icon(Icons.Rounded.Search, stringResource(R.string.main_title_search))
                             }
                             IconButton(onClick = { detail = Detail.Appearance }) {
-                                Icon(Icons.Rounded.Palette, "Apparence")
+                                Icon(Icons.Rounded.Palette, stringResource(R.string.main_title_appearance))
                             }
                             IconButton(onClick = { detail = Detail.Stats }) {
-                                Icon(Icons.Rounded.Info, "Informations")
+                                Icon(Icons.Rounded.Info, stringResource(R.string.main_title_stats))
                             }
                             IconButton(onClick = { detail = Detail.Settings }) {
-                                Icon(Icons.Rounded.Settings, "Réglages")
+                                Icon(Icons.Rounded.Settings, stringResource(R.string.main_title_settings))
                             }
                         }
                     },
@@ -314,7 +321,7 @@ fun OngakuApp(
                 val currentId = player.current?.mediaId
                 when {
                     library.error != null -> CenteredMessage(library.error.orEmpty()) {
-                        Button(onClick = libraryViewModel::refresh) { Text("Réessayer") }
+                        Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_retry)) }
                     }
                     !library.loaded -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                         CircularProgressIndicator()
@@ -322,13 +329,11 @@ fun OngakuApp(
                     // Les réglages restent accessibles, sinon un filtre trop strict serait sans retour.
                     library.tracks.isEmpty() && currentDetail != Detail.Settings &&
                         currentDetail != Detail.Appearance && currentDetail != Detail.Stats -> CenteredMessage(
-                        if (library.allTracks.isEmpty()) {
-                            "Aucune musique trouvée sur ce téléphone."
-                        } else {
-                            "Aucun morceau ne correspond à tes filtres. Modifie-les dans les réglages."
-                        },
+                        stringResource(
+                            if (library.allTracks.isEmpty()) R.string.main_no_music else R.string.main_all_filtered,
+                        ),
                     ) {
-                        Button(onClick = libraryViewModel::refresh) { Text("Rechercher à nouveau") }
+                        Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_search_again)) }
                     }
                     currentDetail is Detail.Group -> GroupTrackList(
                         group = currentDetail.group,
@@ -360,7 +365,7 @@ fun OngakuApp(
                                 currentId = currentId,
                                 actions = actions,
                                 onPlay = playerViewModel::play,
-                                emptyMessage = "Touche le cœur d'un morceau pour l'ajouter ici.",
+                                emptyMessage = stringResource(R.string.library_favorites_empty),
                             )
                         }
                     }
@@ -382,10 +387,10 @@ fun OngakuApp(
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
-                        emptyMessage = "Écoute un morceau au moins 30 secondes pour qu'il apparaisse ici.",
+                        emptyMessage = stringResource(R.string.library_top50_empty),
                         extraLabel = { track ->
                             val plays = counts[track.id] ?: 0
-                            "$plays écoute${if (plays > 1) "s" else ""}"
+                            pluralStringResource(R.plurals.library_play_count, plays, plays)
                         },
                     )
                     currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
@@ -406,7 +411,7 @@ fun OngakuApp(
                                 )
                             },
                             onPlay = playerViewModel::play,
-                            emptyMessage = "Cette liste est vide. Ajoute des morceaux depuis leur menu.",
+                            emptyMessage = stringResource(R.string.library_playlist_empty),
                         )
                     }
                     currentDetail == Detail.Settings -> SettingsScreen(
@@ -493,8 +498,13 @@ fun OngakuApp(
                 appDataViewModel.addToPlaylist(playlist.id, trackIds)
                 adding = null
                 val message = when {
-                    added == 0 -> "Déjà dans « ${playlist.name} »"
-                    trackIds.size > 1 -> "${countLabel(added)} ajouté${if (added > 1) "s" else ""} à « ${playlist.name} »"
+                    added == 0 -> resources.getString(R.string.playlist_already_in, playlist.name)
+                    trackIds.size > 1 -> resources.getQuantityString(
+                        R.plurals.playlist_tracks_added,
+                        added,
+                        added,
+                        playlist.name,
+                    )
                     else -> null
                 }
                 message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -509,7 +519,7 @@ fun OngakuApp(
 
     if (creatingPlaylist) {
         NameDialog(
-            title = "Nouvelle liste",
+            title = stringResource(R.string.playlist_new),
             initial = "",
             taken = { PlaylistEdits.isNameTaken(data.playlists, it) },
             onConfirm = {
@@ -522,7 +532,7 @@ fun OngakuApp(
 
     renamingPlaylist?.let { playlist ->
         NameDialog(
-            title = "Renommer la liste",
+            title = stringResource(R.string.main_rename_playlist),
             initial = playlist.name,
             taken = { PlaylistEdits.isNameTaken(data.playlists, it, exceptId = playlist.id) },
             onConfirm = {
@@ -536,61 +546,50 @@ fun OngakuApp(
     dataNotice?.let { notice ->
         AlertDialog(
             onDismissRequest = AppDataStore::noticeShown,
-            title = { Text("Fichier des listes abîmé") },
+            title = { Text(stringResource(R.string.data_notice_title)) },
             text = {
-                Text(
-                    buildString {
-                        append("Le fichier qui contient tes listes, tes favoris et tes images de fond était illisible. ")
-                        append(
-                            if (notice.restoredFromCopy) {
-                                "Ongaku a repris sa dernière copie : tes dernières modifications peuvent manquer. "
-                            } else {
-                                "Aucune copie lisible n'existait : Ongaku repart de zéro. Tu peux réimporter une sauvegarde depuis les réglages. "
-                            },
-                        )
-                        if (notice.setAsideName != null) {
-                            append("Le fichier abîmé est gardé de côté (${notice.setAsideName}).")
-                        }
-                    },
+                val unreadable = stringResource(R.string.data_notice_unreadable)
+                val outcome = stringResource(
+                    if (notice.restoredFromCopy) R.string.data_notice_restored else R.string.data_notice_reset,
                 )
+                val setAside = notice.setAsideName?.let { stringResource(R.string.data_notice_set_aside, it) }
+                Text(unreadable + outcome + setAside.orEmpty())
             },
-            confirmButton = { TextButton(onClick = AppDataStore::noticeShown) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = AppDataStore::noticeShown) { Text(stringResource(R.string.common_ok)) }
+            },
         )
     }
 
     identityReport?.let { report ->
         AlertDialog(
             onDismissRequest = LibraryIdentity::reportShown,
-            title = { Text("Bibliothèque renumérotée") },
+            title = { Text(stringResource(R.string.identity_title)) },
             text = {
-                Text(
-                    buildString {
-                        append("Android a changé les identifiants de ta musique. ")
-                        if (report.recovered > 0) {
-                            append("${report.recovered} morceau${if (report.recovered > 1) "x" else ""} de tes listes, favoris ou écoutes ")
-                            append(if (report.recovered > 1) "ont été retrouvés. " else "a été retrouvé. ")
-                        }
-                        if (report.missing > 0) {
-                            append(
-                                if (report.missing > 1) {
-                                    "${report.missing} sont introuvables : ils restent dans tes listes et reviendront si leur fichier réapparaît."
-                                } else {
-                                    "1 est introuvable : il reste dans tes listes et reviendra si son fichier réapparaît."
-                                },
-                            )
-                        }
-                    },
-                )
+                val intro = stringResource(R.string.identity_intro)
+                val recovered = if (report.recovered > 0) {
+                    pluralStringResource(R.plurals.identity_recovered, report.recovered, report.recovered)
+                } else {
+                    ""
+                }
+                val missing = if (report.missing > 0) {
+                    pluralStringResource(R.plurals.identity_missing, report.missing, report.missing)
+                } else {
+                    ""
+                }
+                Text(intro + recovered + missing)
             },
-            confirmButton = { TextButton(onClick = LibraryIdentity::reportShown) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = LibraryIdentity::reportShown) { Text(stringResource(R.string.common_ok)) }
+            },
         )
     }
 
     deletingPlaylist?.let { playlist ->
         AlertDialog(
             onDismissRequest = { deletingPlaylist = null },
-            title = { Text("Supprimer « ${playlist.name} » ?") },
-            text = { Text("Seule la liste est supprimée : tes morceaux restent sur le téléphone.") },
+            title = { Text(stringResource(R.string.playlist_delete_title, playlist.name)) },
+            text = { Text(stringResource(R.string.playlist_delete_text)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -598,10 +597,10 @@ fun OngakuApp(
                         deletingPlaylist = null
                         detail = null
                     },
-                ) { Text("Supprimer") }
+                ) { Text(stringResource(R.string.common_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { deletingPlaylist = null }) { Text("Annuler") }
+                TextButton(onClick = { deletingPlaylist = null }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }

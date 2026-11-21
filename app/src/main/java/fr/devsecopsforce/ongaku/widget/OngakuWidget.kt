@@ -98,8 +98,8 @@ object WidgetDisplay {
     private fun buildViews(context: Context, format: Format, artwork: Bitmap?): RemoteViews {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val views = RemoteViews(context.packageName, format.layout)
-        views.setTextViewText(R.id.widget_title, prefs.getString("title", null) ?: "Ongaku")
-        views.setTextViewText(R.id.widget_artist, prefs.getString("artist", null) ?: "Appuie sur lecture")
+        views.setTextViewText(R.id.widget_title, prefs.getString("title", null) ?: context.getString(R.string.app_name))
+        views.setTextViewText(R.id.widget_artist, prefs.getString("artist", null) ?: context.getString(R.string.widget_tap_play))
         views.setImageViewResource(
             R.id.widget_play,
             if (prefs.getBoolean("playing", false)) R.drawable.ic_widget_pause else R.drawable.ic_widget_play,

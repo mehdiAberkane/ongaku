@@ -48,10 +48,13 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.Appearance
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppearanceStore
@@ -79,48 +82,48 @@ fun AppearanceScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Heading("Images de fond")
+        Heading(stringResource(R.string.appearance_backgrounds))
         ImageRow(
-            label = "Application",
+            label = stringResource(R.string.appearance_background_app),
             file = backgroundFile(data.appBackground),
             onPick = { onPick("app") },
             onRemove = { onRemove(BackgroundTarget.App) },
         )
         ImageRow(
-            label = "Écran de lecture",
+            label = stringResource(R.string.appearance_background_player),
             file = backgroundFile(data.playerBackground),
             onPick = { onPick("player") },
             onRemove = { onRemove(BackgroundTarget.Player) },
         )
-        Note("Pour une image propre à un morceau, ouvre le menu ⋮ de ce morceau.")
+        Note(stringResource(R.string.appearance_background_track_note))
         if (missingTrackImages > 0) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "$missingTrackImages image${if (missingTrackImages > 1) "s" else ""} de morceaux " +
-                        "qui ne sont plus sur le téléphone",
+                    pluralStringResource(
+                        R.plurals.appearance_missing_track_images,
+                        missingTrackImages,
+                        missingTrackImages,
+                    ),
                     Modifier.weight(1f),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                TextButton(onClick = onRemoveMissing) { Text("Supprimer") }
+                TextButton(onClick = onRemoveMissing) { Text(stringResource(R.string.common_delete)) }
             }
         }
         Spacer(Modifier.height(12.dp))
         ImageRow(
-            label = "Widget",
+            label = stringResource(R.string.appearance_background_widget),
             file = backgroundFile(data.widgetBackground),
             onPick = { onPick("widget") },
             onRemove = { onRemove(BackgroundTarget.Widget) },
         )
-        Note(
-            "Sans image choisie ici, le widget montre l'image du morceau, sa pochette, " +
-                "ou à défaut l'image de l'écran de lecture.",
-        )
+        Note(stringResource(R.string.appearance_background_widget_note))
         Spacer(Modifier.height(12.dp))
 
         var dim by remember(appearance.backgroundDim) {
             mutableFloatStateOf(appearance.backgroundDim)
         }
-        Text("Assombrissement du fond de l'application : ${(dim * 100).roundToInt()} %")
+        Text(stringResource(R.string.appearance_background_dim, (dim * 100).roundToInt()))
         Slider(
             value = dim,
             valueRange = 0f..0.9f,
@@ -130,7 +133,13 @@ fun AppearanceScreen(
         var blur by remember(appearance.backgroundBlur) {
             mutableFloatStateOf(appearance.backgroundBlur.toFloat())
         }
-        Text(if (blur < 1f) "Flou du fond de l'application : aucun" else "Flou du fond de l'application : ${blur.roundToInt()}")
+        Text(
+            if (blur < 1f) {
+                stringResource(R.string.appearance_background_blur_none)
+            } else {
+                stringResource(R.string.appearance_background_blur, blur.roundToInt())
+            },
+        )
         Slider(
             value = blur,
             valueRange = 0f..24f,
@@ -142,7 +151,7 @@ fun AppearanceScreen(
         var playerDim by remember(appearance.playerDim) {
             mutableFloatStateOf(appearance.playerDim)
         }
-        Text("Assombrissement de l'écran de lecture : ${(playerDim * 100).roundToInt()} %")
+        Text(stringResource(R.string.appearance_player_dim, (playerDim * 100).roundToInt()))
         Slider(
             value = playerDim,
             valueRange = 0f..0.9f,
@@ -152,7 +161,7 @@ fun AppearanceScreen(
 
         Separator()
 
-        Heading("Couleur")
+        Heading(stringResource(R.string.appearance_color))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -161,7 +170,7 @@ fun AppearanceScreen(
                 store.update { it.copy(accent = null) }
             }
             AccentPresets.forEach { (name, color) ->
-                ColorSwatch(name, color, selected = appearance.accent == color) {
+                ColorSwatch(stringResource(name), color, selected = appearance.accent == color) {
                     store.update { it.copy(accent = color) }
                 }
             }
@@ -178,7 +187,7 @@ fun AppearanceScreen(
                     .background(Color(hueToColor(hue))),
             )
             Spacer(Modifier.width(8.dp))
-            Text("Couleur personnalisée")
+            Text(stringResource(R.string.appearance_custom_color))
         }
         Slider(
             value = hue,
@@ -187,94 +196,99 @@ fun AppearanceScreen(
             onValueChangeFinished = { store.update { it.copy(accent = hueToColor(hue)) } },
         )
         OptionSwitch(
-            title = "Suivre la pochette du morceau",
-            note = "Sans pochette colorée, ta couleur ci-dessus s'applique.",
+            title = stringResource(R.string.appearance_accent_from_artwork),
+            note = stringResource(R.string.appearance_accent_from_artwork_note),
             checked = appearance.accentFromArtwork,
             onChange = { value -> store.update { it.copy(accentFromArtwork = value) } },
         )
 
         Separator()
 
-        Heading("Thème")
+        Heading(stringResource(R.string.appearance_theme))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                ThemeMode.SYSTEM to "Système",
-                ThemeMode.LIGHT to "Clair",
-                ThemeMode.DARK to "Sombre",
+                ThemeMode.SYSTEM to R.string.appearance_theme_system,
+                ThemeMode.LIGHT to R.string.appearance_theme_light,
+                ThemeMode.DARK to R.string.appearance_theme_dark,
             ).forEach { (mode, label) ->
                 FilterChip(
                     selected = appearance.themeMode == mode,
                     onClick = { store.update { it.copy(themeMode = mode) } },
-                    label = { Text(label) },
+                    label = { Text(stringResource(label)) },
                 )
             }
         }
         Spacer(Modifier.height(8.dp))
         OptionSwitch(
-            title = "Noir pur",
-            note = "En thème sombre : fond totalement noir, économe sur écran OLED.",
+            title = stringResource(R.string.appearance_pure_black),
+            note = stringResource(R.string.appearance_pure_black_note),
             checked = appearance.pureBlack,
             onChange = { value -> store.update { it.copy(pureBlack = value) } },
         )
 
         Separator()
 
-        Heading("Pochettes")
+        Heading(stringResource(R.string.appearance_covers))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                CoverShape.ROUNDED to "Arrondies",
-                CoverShape.CIRCLE to "Rondes",
-                CoverShape.SQUARE to "Carrées",
+                CoverShape.ROUNDED to R.string.appearance_cover_rounded,
+                CoverShape.CIRCLE to R.string.appearance_cover_circle,
+                CoverShape.SQUARE to R.string.appearance_cover_square,
             ).forEach { (shape, label) ->
                 FilterChip(
                     selected = appearance.coverShape == shape,
                     onClick = { store.update { it.copy(coverShape = shape) } },
-                    label = { Text(label) },
+                    label = { Text(stringResource(label)) },
                 )
             }
         }
 
         Separator()
 
-        Heading("Affichage")
-        Text("Taille du texte")
+        Heading(stringResource(R.string.appearance_display))
+        Text(stringResource(R.string.appearance_text_size))
         Spacer(Modifier.height(4.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(0.85f to "Petit", 1f to "Normal", 1.15f to "Grand", 1.3f to "Très grand")
+            listOf(
+                0.85f to R.string.appearance_text_small,
+                1f to R.string.appearance_text_normal,
+                1.15f to R.string.appearance_text_large,
+                1.3f to R.string.appearance_text_huge,
+            )
                 .forEach { (scale, label) ->
                     FilterChip(
                         selected = appearance.textScale == scale,
                         onClick = { store.update { it.copy(textScale = scale) } },
-                        label = { Text(label) },
+                        label = { Text(stringResource(label)) },
                     )
                 }
         }
         Spacer(Modifier.height(8.dp))
         OptionSwitch(
-            title = "Liste compacte",
-            note = "Lignes plus serrées pour voir plus de morceaux.",
+            title = stringResource(R.string.appearance_compact_list),
+            note = stringResource(R.string.appearance_compact_list_note),
             checked = appearance.compactList,
             onChange = { value -> store.update { it.copy(compactList = value) } },
         )
         Spacer(Modifier.height(8.dp))
-        Text("Onglet au démarrage")
+        Text(stringResource(R.string.appearance_start_tab))
         Spacer(Modifier.height(4.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Titres", "Albums", "Artistes", "Listes").forEachIndexed { index, label ->
+            LIBRARY_TABS.forEachIndexed { index, label ->
                 FilterChip(
                     selected = appearance.startTab == index,
                     onClick = { store.update { it.copy(startTab = index) } },
-                    label = { Text(label) },
+                    label = { Text(stringResource(label)) },
                 )
             }
         }
 
         Spacer(Modifier.height(24.dp))
         OutlinedButton(onClick = { store.update { Appearance() } }) {
-            Text("Réinitialiser l'apparence")
+            Text(stringResource(R.string.appearance_reset))
         }
         Spacer(Modifier.height(4.dp))
-        Note("Remet couleurs et réglages par défaut, sans toucher à tes images.")
+        Note(stringResource(R.string.appearance_reset_note))
     }
 }
 
@@ -352,8 +366,8 @@ private fun ImageRow(label: String, file: File?, onPick: () -> Unit, onRemove: (
         }
         Spacer(Modifier.width(12.dp))
         Text(label, Modifier.weight(1f))
-        if (file != null) TextButton(onClick = onRemove) { Text("Retirer") }
-        TextButton(onClick = onPick) { Text("Choisir") }
+        if (file != null) TextButton(onClick = onRemove) { Text(stringResource(R.string.common_remove)) }
+        TextButton(onClick = onPick) { Text(stringResource(R.string.appearance_choose)) }
     }
 }
 
@@ -362,6 +376,7 @@ private val SwatchSize = 44.dp
 @Composable
 private fun ColorSwatch(name: String, color: Int, selected: Boolean, onClick: () -> Unit) {
     val swatch = Color(color)
+    val description = stringResource(R.string.appearance_color_description, name)
     Box(
         Modifier
             .size(SwatchSize)
@@ -369,7 +384,7 @@ private fun ColorSwatch(name: String, color: Int, selected: Boolean, onClick: ()
             .background(swatch)
             .selectionBorder(selected)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Couleur $name" },
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
@@ -384,6 +399,7 @@ private fun ColorSwatch(name: String, color: Int, selected: Boolean, onClick: ()
 
 @Composable
 private fun SystemSwatch(selected: Boolean, onClick: () -> Unit) {
+    val description = stringResource(R.string.appearance_system_colors)
     Box(
         Modifier
             .size(SwatchSize)
@@ -391,7 +407,7 @@ private fun SystemSwatch(selected: Boolean, onClick: () -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .selectionBorder(selected)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Couleurs du système" },
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

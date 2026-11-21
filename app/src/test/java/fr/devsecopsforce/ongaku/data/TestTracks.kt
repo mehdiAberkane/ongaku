@@ -18,6 +18,7 @@ internal fun track(
     relativePath: String = "$folder/$title.$extension",
     sizeBytes: Long = 1_000L + id,
     albumArtist: String = "",
+    artistMissing: Boolean = false,
 ) = Track(
     id = id,
     title = title,
@@ -35,6 +36,7 @@ internal fun track(
     artworkUri = Uri.EMPTY,
     relativePath = relativePath,
     albumArtist = albumArtist,
+    artistMissing = artistMissing,
 )
 
 /** Le même fichier, auquel Android a donné un autre identifiant. */

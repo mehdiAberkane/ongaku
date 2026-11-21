@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 
 /**
@@ -37,7 +38,7 @@ class BluetoothAutoplayReceiver : BroadcastReceiver() {
 
         val app = context.applicationContext
         val name = deviceName(device)
-        AutoplayJournal.add(app, "connexion de $name reçue")
+        AutoplayJournal.add(app, app.getString(R.string.autoplay_log_connection, name))
         val pending = goAsync()
         waitForRoute(app, device.address, name, SystemClock.elapsedRealtime(), pending)
     }
@@ -50,11 +51,11 @@ class BluetoothAutoplayReceiver : BroadcastReceiver() {
         val waited = SystemClock.elapsedRealtime() - since
         when {
             AutoplayGuard.routedTo(app, address) -> {
-                AutoplayJournal.add(app, "sortie audio prête après ${"%.1f".format(waited / 1000.0)} s")
+                AutoplayJournal.add(app, app.getString(R.string.autoplay_log_route_ready, "%.1f".format(waited / 1000.0)))
                 start(app, address, name, pending)
             }
             waited >= AutoplayRules.ROUTE_TIMEOUT_MS -> {
-                AutoplayJournal.add(app, "sortie audio pas prête après ${waited / 1000} s : lecture tentée quand même")
+                AutoplayJournal.add(app, app.getString(R.string.autoplay_log_route_timeout, waited / 1000))
                 start(app, address, name, pending)
             }
             else -> Handler(Looper.getMainLooper()).postDelayed(
@@ -73,7 +74,7 @@ class BluetoothAutoplayReceiver : BroadcastReceiver() {
             {
                 val controller = runCatching { future.get() }.getOrNull()
                 if (controller == null) {
-                    AutoplayJournal.add(app, "lecteur injoignable")
+                    AutoplayJournal.add(app, app.getString(R.string.autoplay_log_player_unreachable))
                     pending.finish()
                     return@addListener
                 }

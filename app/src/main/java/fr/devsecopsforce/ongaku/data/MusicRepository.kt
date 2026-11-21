@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import fr.devsecopsforce.ongaku.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -30,6 +31,8 @@ data class Track(
     val relativePath: String = "",
     /** Artiste de l'album (tag « album artist ») ; vide s'il n'est pas renseigné. */
     val albumArtist: String = "",
+    /** Tag artiste absent : [artist] contient alors le libellé « Artiste inconnu ». */
+    val artistMissing: Boolean = false,
 ) {
     /** Numéro de disque : MediaStore l'encode dans les milliers du numéro de piste ; 0 s'il manque. */
     val discNumber: Int get() = trackNumber / 1000
@@ -70,6 +73,10 @@ class MusicRepository(private val context: Context) {
             ALBUM_ARTIST,
         )
         val tracks = mutableListOf<Track>()
+        // Libellés lus une fois pour toute la bibliothèque.
+        val untitled = context.getString(R.string.library_untitled)
+        val unknownArtist = context.getString(R.string.library_unknown_artist)
+        val unknownAlbum = context.getString(R.string.library_unknown_album)
         context.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -94,14 +101,13 @@ class MusicRepository(private val context: Context) {
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 val albumId = cursor.getLong(albumIdColumn)
-                val artist = cursor.getString(artistColumn)
+                val artist = cursor.getString(artistColumn)?.takeUnless { it == MediaStore.UNKNOWN_STRING }
                 val path = cursor.getString(pathColumn).orEmpty()
                 tracks += Track(
                     id = id,
-                    title = cursor.getString(titleColumn) ?: "Sans titre",
-                    artist = artist?.takeUnless { it == MediaStore.UNKNOWN_STRING }
-                        ?: UNKNOWN_ARTIST,
-                    album = cursor.getString(albumColumn) ?: "Album inconnu",
+                    title = cursor.getString(titleColumn) ?: untitled,
+                    artist = artist ?: unknownArtist,
+                    album = cursor.getString(albumColumn) ?: unknownAlbum,
                     albumId = albumId,
                     // MediaStore encode le numéro de disque dans les milliers.
                     trackNumber = cursor.getInt(trackColumn),
@@ -122,6 +128,7 @@ class MusicRepository(private val context: Context) {
                         ?.trim()
                         ?.takeUnless { it == MediaStore.UNKNOWN_STRING }
                         .orEmpty(),
+                    artistMissing = artist == null,
                 )
             }
         }
