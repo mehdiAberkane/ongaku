@@ -5,8 +5,6 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,14 +69,10 @@ internal fun BluetoothAutoplaySection(settings: PlaybackSettings) {
         refresh()
         onPauseOrDispose { }
     }
-    val permissionRequest = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
+    val access = rememberPermissionAccess(
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Manifest.permission.BLUETOOTH_CONNECT else null,
     ) { refresh() }
-    val requestPermission = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissionRequest.launch(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-    }
+    val requestPermission = access.request
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.autoplay_setting), Modifier.weight(1f))
@@ -96,8 +90,13 @@ internal fun BluetoothAutoplaySection(settings: PlaybackSettings) {
 
     Spacer(Modifier.height(4.dp))
     if (!permitted) {
-        Hint(stringResource(R.string.autoplay_permission_missing))
-        OutlinedButton(onClick = requestPermission) { Text(stringResource(R.string.common_allow)) }
+        if (access.blocked) {
+            Hint(stringResource(R.string.autoplay_permission_blocked))
+            OutlinedButton(onClick = requestPermission) { Text(stringResource(R.string.main_permission_settings)) }
+        } else {
+            Hint(stringResource(R.string.autoplay_permission_missing))
+            OutlinedButton(onClick = requestPermission) { Text(stringResource(R.string.common_allow)) }
+        }
         return
     }
     if (devices.isEmpty()) {
