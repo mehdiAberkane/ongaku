@@ -37,6 +37,8 @@
     <!-- Écran principal -->
     <string name="main_permission_needed">Ongaku a besoin d\'accéder à ta musique pour la lire.</string>
     <string name="main_permission_allow">Autoriser l\'accès</string>
+    <string name="main_permission_blocked">Android n\'affiche plus la demande d\'accès à ta musique, car elle a été refusée. Pour l\'accorder : Paramètres de l\'application, Autorisations, Musique et audio.</string>
+    <string name="main_permission_settings">Ouvrir les paramètres</string>
     <string name="main_retry">Réessayer</string>
     <string name="main_no_music">Aucune musique trouvée sur ce téléphone.</string>
     <string name="main_all_filtered">Aucun morceau ne correspond à tes filtres. Modifie-les dans les réglages.</string>
@@ -268,6 +270,7 @@
 
     <!-- Lecture automatique en Bluetooth -->
     <string name="autoplay_setting">Lecture automatique en Bluetooth</string>
+    <string name="autoplay_permission_blocked">Android n\'affiche plus la demande, car elle a été refusée. Pour l\'accorder : Paramètres de l\'application, Autorisations, Appareils à proximité. Elle ne donne aucun accès à tes fichiers.</string>
     <string name="autoplay_permission_missing">Il manque l\'autorisation Android « Appareils à proximité ». Elle ne donne aucun accès à tes fichiers.</string>
     <string name="autoplay_no_device">Aucun appareil associé. Active le Bluetooth et associe ton appareil dans les paramètres d\'Android.</string>
     <string name="autoplay_note">La lecture reprend quand l\'un de ces appareils se connecte, dès que le son peut sortir vers lui. Si l\'appareil la coupe en démarrant (un autoradio, par exemple), elle est relancée pendant 40 secondes, sauf si tu la mets en pause dans Ongaku.</string>

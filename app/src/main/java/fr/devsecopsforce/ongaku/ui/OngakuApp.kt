@@ -6,7 +6,6 @@ package fr.devsecopsforce.ongaku.ui
 import androidx.compose.material3.ExperimentalMaterial3Api
 import android.Manifest
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
@@ -58,7 +57,6 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import fr.devsecopsforce.ongaku.R
@@ -107,24 +105,28 @@ fun OngakuApp(
     val context = LocalContext.current
     // Textes lus hors composition (messages des clics) : suivent la configuration en cours.
     val resources = LocalResources.current
-    var granted by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, audioPermission) ==
-                PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted = it }
+    val access = rememberPermissionAccess(audioPermission)
+    val granted = access.granted
+    // Demandée d'elle-même une seule fois ; ensuite, par le bouton.
+    var autoRequested by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(granted) {
-        if (granted) libraryViewModel.load() else launcher.launch(audioPermission)
+        if (granted) {
+            libraryViewModel.load()
+        } else if (!autoRequested) {
+            autoRequested = true
+            access.request()
+        }
     }
 
     if (!granted) {
-        CenteredMessage(stringResource(R.string.main_permission_needed)) {
-            Button(onClick = { launcher.launch(audioPermission) }) {
-                Text(stringResource(R.string.main_permission_allow))
+        if (access.blocked) {
+            CenteredMessage(stringResource(R.string.main_permission_blocked)) {
+                Button(onClick = access.request) { Text(stringResource(R.string.main_permission_settings)) }
+            }
+        } else {
+            CenteredMessage(stringResource(R.string.main_permission_needed)) {
+                Button(onClick = access.request) { Text(stringResource(R.string.main_permission_allow)) }
             }
         }
         return
