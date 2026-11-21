@@ -25,6 +25,7 @@ class PlaybackService : MediaSessionService() {
 
     private var session: MediaSession? = null
     private var crossfade: CrossfadeController? = null
+    private val autoplay by lazy { AutoplayGuard(this, scope) { session?.player } }
     private var stateKeeper: PlaybackStateKeeper? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var settings: PlaybackSettings
@@ -65,7 +66,7 @@ class PlaybackService : MediaSessionService() {
 
         val launchIntent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
         val builder = MediaSession.Builder(this, player)
-            .setCallback(ResumptionCallback(this, scope))
+            .setCallback(ResumptionCallback(this, scope, autoplay))
         if (launchIntent != null) {
             builder.setSessionActivity(
                 PendingIntent.getActivity(
@@ -125,6 +126,7 @@ class PlaybackService : MediaSessionService() {
         settings.prefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
         stateKeeper?.release()
         stateKeeper = null
+        autoplay.stop()
         scope.cancel()
         crossfade?.release()
         crossfade = null
