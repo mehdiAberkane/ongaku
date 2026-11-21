@@ -69,10 +69,8 @@ import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
-import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
 import fr.devsecopsforce.ongaku.data.Track
-import fr.devsecopsforce.ongaku.data.TrackGroup
 import fr.devsecopsforce.ongaku.data.TrackSort
 import fr.devsecopsforce.ongaku.data.albums
 import fr.devsecopsforce.ongaku.data.artists
@@ -87,19 +85,6 @@ internal val audioPermission: String
     } else {
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
-
-internal sealed interface Detail {
-    /** [from] : écran où revenir, par exemple la recherche qui a ouvert cet album. */
-    data class Group(val group: TrackGroup, val from: Detail? = null) : Detail
-    data object Search : Detail
-    data object Favorites : Detail
-    data object RecentlyAdded : Detail
-    data object Top50 : Detail
-    data class PlaylistDetail(val id: String) : Detail
-    data object Settings : Detail
-    data object Stats : Detail
-    data object Appearance : Detail
-}
 
 /** Actions du menu d'un morceau, partagées par les listes et l'écran de lecture. */
 internal data class TrackActions(
@@ -151,16 +136,17 @@ fun OngakuApp(
     val settings = remember { PlaybackSettings(context) }
     ArtworkAccentEffect(player.current?.mediaMetadata?.artworkUri)
 
-    var detail by remember { mutableStateOf<Detail?>(null) }
+    // Sauvegardés : une rotation ou un changement de thème recrée l'activité.
+    var detail by rememberSaveable(stateSaver = DetailSaver) { mutableStateOf<Detail?>(null) }
     // Gardé ici : les onglets quittent la composition quand une liste ou un album est ouvert.
     val startTab = LocalAppearance.current.startTab
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     // Morceaux à ajouter à une liste : un seul, un album, un artiste, la file…
-    var adding by remember { mutableStateOf<List<Long>?>(null) }
-    var creatingPlaylist by remember { mutableStateOf(false) }
-    var renamingPlaylist by remember { mutableStateOf<Playlist?>(null) }
-    var deletingPlaylist by remember { mutableStateOf<Playlist?>(null) }
+    var adding by rememberSaveable(stateSaver = TrackIdsSaver) { mutableStateOf<List<Long>?>(null) }
+    var creatingPlaylist by rememberSaveable { mutableStateOf(false) }
+    var renamingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Conservée en texte : le sélecteur d'images peut provoquer la recréation de l'activité.
     var pendingTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -229,6 +215,17 @@ fun OngakuApp(
     val currentDetail = detail
     val currentPlaylist = (currentDetail as? Detail.PlaylistDetail)
         ?.let { open -> data.playlists.firstOrNull { it.id == open.id } }
+    val renamingPlaylist = renamingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
+    val deletingPlaylist = deletingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
+    // Retrouvé dans la bibliothèque actuelle : la page suit un morceau ajouté ou retiré.
+    val groupKey = (currentDetail as? Detail.Group)?.key
+    val openGroup = remember(groupKey, albums, artists) { groupKey?.let { findGroup(it, albums, artists) } }
+    LaunchedEffect(groupKey, openGroup, library.loaded) {
+        // Album ou artiste disparu (morceaux supprimés, filtre) : retour à l'écran précédent.
+        if (library.loaded && groupKey != null && openGroup == null) {
+            detail = (detail as? Detail.Group)?.from
+        }
+    }
     val favoriteTracks = remember(library.tracks, data.favorites) {
         library.tracks.filter { it.id in data.favorites }
     }
@@ -236,7 +233,7 @@ fun OngakuApp(
         currentPlaylist?.trackIds.orEmpty().mapNotNull(tracksById::get)
     }
     val detailTitle = when (currentDetail) {
-        is Detail.Group -> currentDetail.group.title
+        is Detail.Group -> openGroup?.title.orEmpty()
         Detail.Search -> stringResource(R.string.main_title_search)
         Detail.Favorites -> stringResource(R.string.main_title_favorites)
         Detail.RecentlyAdded -> stringResource(R.string.main_title_recent)
@@ -270,7 +267,7 @@ fun OngakuApp(
                     actions = {
                         // Album, artiste, favoris ou liste ouverts : tout ajouter à la file.
                         val detailTracks = when (currentDetail) {
-                            is Detail.Group -> currentDetail.group.tracks
+                            is Detail.Group -> openGroup?.tracks.orEmpty()
                             Detail.Favorites -> favoriteTracks
                             is Detail.PlaylistDetail -> playlistTracks
                             else -> emptyList()
@@ -283,10 +280,10 @@ fun OngakuApp(
                             )
                         }
                         if (currentPlaylist != null) {
-                            IconButton(onClick = { renamingPlaylist = currentPlaylist }) {
+                            IconButton(onClick = { renamingId = currentPlaylist.id }) {
                                 Icon(Icons.Rounded.Edit, stringResource(R.string.main_rename_playlist))
                             }
-                            IconButton(onClick = { deletingPlaylist = currentPlaylist }) {
+                            IconButton(onClick = { deletingId = currentPlaylist.id }) {
                                 Icon(Icons.Rounded.Delete, stringResource(R.string.main_delete_playlist))
                             }
                         } else if (currentDetail == null) {
@@ -335,8 +332,9 @@ fun OngakuApp(
                     ) {
                         Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_search_again)) }
                     }
-                    currentDetail is Detail.Group -> GroupTrackList(
-                        group = currentDetail.group,
+                    // Le temps de retrouver le groupe ou de revenir en arrière : rien à afficher.
+                    currentDetail is Detail.Group -> if (openGroup != null) GroupTrackList(
+                        group = openGroup,
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
@@ -350,7 +348,7 @@ fun OngakuApp(
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
-                        onOpenGroup = { detail = Detail.Group(it, from = Detail.Search) },
+                        onOpenGroup = { detail = Detail.Group(it.key, from = Detail.Search) },
                     )
                     currentDetail == Detail.Favorites -> WithMissingBanner(
                         missing = data.favorites.count { it !in existingIds },
@@ -458,7 +456,7 @@ fun OngakuApp(
                         onPlay = playerViewModel::play,
                         // « Lire » suit l'ordre affiché.
                         onPlayAll = { shuffled -> playerViewModel.playAll(sortedTracks, shuffled) },
-                        onOpenGroup = { detail = Detail.Group(it) },
+                        onOpenGroup = { detail = Detail.Group(it.key) },
                         onOpenFavorites = { detail = Detail.Favorites },
                         onOpenRecent = { detail = Detail.RecentlyAdded },
                         onOpenTop = { detail = Detail.Top50 },
@@ -537,9 +535,9 @@ fun OngakuApp(
             taken = { PlaylistEdits.isNameTaken(data.playlists, it, exceptId = playlist.id) },
             onConfirm = {
                 appData.renamePlaylist(playlist.id, it)
-                renamingPlaylist = null
+                renamingId = null
             },
-            onDismiss = { renamingPlaylist = null },
+            onDismiss = { renamingId = null },
         )
     }
 
@@ -587,20 +585,20 @@ fun OngakuApp(
 
     deletingPlaylist?.let { playlist ->
         AlertDialog(
-            onDismissRequest = { deletingPlaylist = null },
+            onDismissRequest = { deletingId = null },
             title = { Text(stringResource(R.string.playlist_delete_title, playlist.name)) },
             text = { Text(stringResource(R.string.playlist_delete_text)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         appData.deletePlaylist(playlist.id)
-                        deletingPlaylist = null
+                        deletingId = null
                         detail = null
                     },
                 ) { Text(stringResource(R.string.common_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { deletingPlaylist = null }) { Text(stringResource(R.string.common_cancel)) }
+                TextButton(onClick = { deletingId = null }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }
