@@ -117,7 +117,7 @@ internal data class TrackActions(
 fun OngakuApp(
     libraryViewModel: LibraryViewModel,
     playerViewModel: PlayerViewModel,
-    appDataViewModel: AppDataViewModel,
+    appData: AppDataRepository,
 ) {
     val context = LocalContext.current
     // Textes lus hors composition (messages des clics) : suivent la configuration en cours.
@@ -147,7 +147,7 @@ fun OngakuApp(
 
     val library by libraryViewModel.state.collectAsStateWithLifecycle()
     val player by playerViewModel.state.collectAsStateWithLifecycle()
-    val data by appDataViewModel.state.collectAsStateWithLifecycle()
+    val data by appData.state.collectAsStateWithLifecycle()
     val settings = remember { PlaybackSettings(context) }
     ArtworkAccentEffect(player.current?.mediaMetadata?.artworkUri)
 
@@ -168,7 +168,7 @@ fun OngakuApp(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
         val target = decodeTarget(pendingTarget)
-        if (uri != null && target != null) appDataViewModel.setBackground(target, uri)
+        if (uri != null && target != null) appData.setBackground(target, uri)
         pendingTarget = null
     }
     val pickImage: (String) -> Unit = { target ->
@@ -217,10 +217,10 @@ fun OngakuApp(
     val actions = remember(data, allTracksById) {
         TrackActions(
             data = data,
-            toggleFavorite = appDataViewModel::toggleFavorite,
+            toggleFavorite = appData::toggleFavorite,
             addToPlaylist = { adding = listOf(it) },
             pickBackground = { pickImage("track:$it") },
-            removeBackground = { appDataViewModel.removeBackground(BackgroundTarget.Track(it)) },
+            removeBackground = { appData.removeBackground(BackgroundTarget.Track(it)) },
             playNext = { id -> allTracksById[id]?.let { enqueue(listOf(it), true) } },
             addToQueue = { id -> allTracksById[id]?.let { enqueue(listOf(it), false) } },
         )
@@ -249,7 +249,7 @@ fun OngakuApp(
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        BackgroundImage(appDataViewModel.backgroundFile(data.appBackground))
+        BackgroundImage(appData.backgroundFile(data.appBackground))
 
         Scaffold(
             containerColor = Color.Transparent,
@@ -354,7 +354,7 @@ fun OngakuApp(
                     )
                     currentDetail == Detail.Favorites -> WithMissingBanner(
                         missing = data.favorites.count { it !in existingIds },
-                        onRemove = { appDataViewModel.removeMissingFavorites(existingIds) },
+                        onRemove = { appData.removeMissingFavorites(existingIds) },
                     ) {
                         Column(Modifier.fillMaxSize()) {
                             if (favoriteTracks.isNotEmpty()) {
@@ -396,17 +396,17 @@ fun OngakuApp(
                     currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
                         missing = currentPlaylist?.trackIds.orEmpty().count { it !in existingIds },
                         onRemove = {
-                            appDataViewModel.removeMissingFromPlaylist(currentDetail.id, existingIds)
+                            appData.removeMissingFromPlaylist(currentDetail.id, existingIds)
                         },
                     ) {
                         ReorderableTrackList(
                             tracks = playlistTracks,
-                            onReorder = { order -> appDataViewModel.reorderPlaylist(currentDetail.id, order) },
+                            onReorder = { order -> appData.reorderPlaylist(currentDetail.id, order) },
                             currentId = currentId,
                             actions = remember(actions, currentDetail.id) {
                                 actions.copy(
                                     removeFromPlaylist = { trackId ->
-                                        appDataViewModel.removeFromPlaylist(currentDetail.id, trackId)
+                                        appData.removeFromPlaylist(currentDetail.id, trackId)
                                     },
                                 )
                             },
@@ -424,18 +424,18 @@ fun OngakuApp(
                             settings.mergeFeaturing = it
                         },
                         // Tous les morceaux : un filtre ne doit pas vider la sauvegarde des listes.
-                        onExport = { appDataViewModel.exportBackup(it, library.allTracks) },
-                        onImport = { appDataViewModel.importBackup(it, library.allTracks) },
+                        onExport = { appData.exportBackup(it, library.allTracks) },
+                        onImport = { appData.importBackup(it, library.allTracks) },
                     )
                     currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
                     currentDetail == Detail.Appearance -> AppearanceScreen(
                         data = data,
-                        backgroundFile = appDataViewModel::backgroundFile,
+                        backgroundFile = appData::backgroundFile,
                         onPick = pickImage,
-                        onRemove = appDataViewModel::removeBackground,
+                        onRemove = appData::removeBackground,
                         // Tous les morceaux : un morceau masqué par le filtre n'a pas disparu.
                         missingTrackImages = data.missingTrackBackgrounds(existingIds).size,
-                        onRemoveMissing = { appDataViewModel.removeMissingBackgrounds(existingIds) },
+                        onRemoveMissing = { appData.removeMissingBackgrounds(existingIds) },
                     )
                     else -> LibraryTabs(
                         tab = tab,
@@ -482,7 +482,7 @@ fun OngakuApp(
                 viewModel = playerViewModel,
                 trackId = trackId,
                 actions = actions,
-                background = appDataViewModel.backgroundFile(playerBackgroundName(data, trackId)),
+                background = appData.backgroundFile(playerBackgroundName(data, trackId)),
                 onClose = { playerOpen = false },
                 onAddQueueToPlaylist = { ids -> adding = ids },
             )
@@ -495,7 +495,7 @@ fun OngakuApp(
             trackCount = trackIds.size,
             onSelect = { playlist ->
                 val added = trackIds.distinct().count { it !in playlist.trackIds }
-                appDataViewModel.addToPlaylist(playlist.id, trackIds)
+                appData.addToPlaylist(playlist.id, trackIds)
                 adding = null
                 val message = when {
                     added == 0 -> resources.getString(R.string.playlist_already_in, playlist.name)
@@ -510,7 +510,7 @@ fun OngakuApp(
                 message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
             },
             onCreate = { name ->
-                appDataViewModel.createPlaylist(name, trackIds)
+                appData.createPlaylist(name, trackIds)
                 adding = null
             },
             onDismiss = { adding = null },
@@ -523,7 +523,7 @@ fun OngakuApp(
             initial = "",
             taken = { PlaylistEdits.isNameTaken(data.playlists, it) },
             onConfirm = {
-                appDataViewModel.createPlaylist(it)
+                appData.createPlaylist(it)
                 creatingPlaylist = false
             },
             onDismiss = { creatingPlaylist = false },
@@ -536,7 +536,7 @@ fun OngakuApp(
             initial = playlist.name,
             taken = { PlaylistEdits.isNameTaken(data.playlists, it, exceptId = playlist.id) },
             onConfirm = {
-                appDataViewModel.renamePlaylist(playlist.id, it)
+                appData.renamePlaylist(playlist.id, it)
                 renamingPlaylist = null
             },
             onDismiss = { renamingPlaylist = null },
@@ -593,7 +593,7 @@ fun OngakuApp(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        appDataViewModel.deletePlaylist(playlist.id)
+                        appData.deletePlaylist(playlist.id)
                         deletingPlaylist = null
                         detail = null
                     },
