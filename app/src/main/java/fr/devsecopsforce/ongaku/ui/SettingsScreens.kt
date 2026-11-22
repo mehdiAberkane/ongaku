@@ -60,6 +60,7 @@ fun SettingsScreen(
     onExport: (Uri) -> Unit,
     onImport: (Uri) -> Unit,
     onOpenEqualizer: () -> Unit,
+    onAutoBackupNow: () -> Unit,
     smartSize: Int,
     onSmartSizeChange: (Int) -> Unit,
 ) {
@@ -204,6 +205,8 @@ fun SettingsScreen(
         SectionTitle(stringResource(R.string.settings_backup))
         Hint(stringResource(R.string.settings_backup_note))
         Hint(stringResource(R.string.settings_backup_drive_note))
+        Spacer(Modifier.height(16.dp))
+        AutoBackupSection(onAutoBackupNow)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = { exporter.launch("ongaku-sauvegarde-${LocalDate.now()}.zip") }) {

@@ -2,6 +2,14 @@ package fr.devsecopsforce.ongaku.ui
 
 import android.app.Application
 import android.content.Context
+import android.provider.DocumentsContract
+import android.util.Log
+import androidx.core.net.toUri
+import fr.devsecopsforce.ongaku.data.AutoBackupRules
+import fr.devsecopsforce.ongaku.data.AutoBackupSettings
+import fr.devsecopsforce.ongaku.data.LibraryCache
+import java.io.OutputStream
+import java.time.LocalDateTime
 import android.graphics.BitmapFactory
 import androidx.core.content.edit
 import fr.devsecopsforce.ongaku.data.AppearanceStore
@@ -63,6 +71,7 @@ class AppDataRepository private constructor(private val app: Application) {
     private val store = AppDataStore(app)
     private val backgroundsDir = File(app.filesDir, "backgrounds")
     private val mutex = Mutex()
+    private val autoBackupMutex = Mutex()
 
     private val _state = MutableStateFlow(AppData())
     val state: StateFlow<AppData> = _state.asStateFlow()
@@ -216,31 +225,9 @@ class AppDataRepository private constructor(private val app: Application) {
         scope.launch {
             loading.join()
             try {
-                val data = _state.value
-                val history = ListeningHistory.get(app)
-                val counts = PlayCounts(app)
-                // Images de fond : copiées telles quelles dans l'archive, une seule fois chacune.
-                val images = LinkedHashMap<String, File>()
-                fun image(name: String?): String? {
-                    val file = backgroundFile(name)?.takeIf { it.isFile } ?: return null
-                    return (BackupArchive.IMAGES_DIR + file.name).also { images[it] = file }
-                }
-                val extras = PlaylistBackup.Extras(
-                    playCounts = counts.all(),
-                    lastPlayed = counts.lastPlayed(),
-                    // Seulement les réglages qui existent : une section vide ne créerait rien d'utile.
-                    settings = PlaylistBackup.SETTINGS_FILES
-                        .associateWith { app.getSharedPreferences(it, Context.MODE_PRIVATE).all }
-                        .filterValues { it.isNotEmpty() },
-                    appImage = image(data.appBackground),
-                    playerImage = image(data.playerBackground),
-                    widgetImage = image(data.widgetBackground),
-                    trackImages = data.trackBackgrounds.mapNotNull { (id, name) -> image(name)?.let { id to it } }.toMap(),
-                )
-                val json = PlaylistBackup.serialize(data, tracks, history.plays.value, history.days.value, extras)
                 val output = app.contentResolver.openOutputStream(target)
                     ?: throw IOException("destination inaccessible")
-                output.use { BackupArchive.write(it, json, images) }
+                output.use { writeBackup(it, tracks) }
                 toast(R.string.backup_exported)
             } catch (e: IOException) {
                 toast(R.string.backup_export_failed)
@@ -248,6 +235,93 @@ class AppDataRepository private constructor(private val app: Application) {
                 toast(R.string.backup_export_failed)
             }
         }
+    }
+
+    /** Sauvegarde automatique, si elle est due ; voir [AutoBackupRules]. */
+    fun autoBackupIfDue() {
+        scope.launch { runAutoBackup(force = false) }
+    }
+
+    /** « Sauvegarder maintenant » dans les réglages. */
+    fun autoBackupNow() {
+        scope.launch {
+            val done = runAutoBackup(force = true)
+            toast(if (done) R.string.auto_backup_done else R.string.auto_backup_failed)
+        }
+    }
+
+    /**
+     * Écrit une archive datée dans le dossier choisi, puis supprime les plus anciennes sauvegardes
+     * d'Ongaku au-delà du nombre gardé. Rend vrai si l'archive est écrite.
+     */
+    private suspend fun runAutoBackup(force: Boolean): Boolean = autoBackupMutex.withLock {
+        loading.join()
+        val settings = AutoBackupSettings(app)
+        val folder = settings.folderUri?.toUri() ?: return@withLock false
+        val now = System.currentTimeMillis()
+        if (!force && !AutoBackupRules.isDue(settings.enabled, true, settings.lastRunMs, now, settings.intervalDays)) {
+            return@withLock false
+        }
+        val resolver = app.contentResolver
+        try {
+            val tracks = LibraryCache.tracks(app)
+            val dir = DocumentsContract.buildDocumentUriUsingTree(folder, DocumentsContract.getTreeDocumentId(folder))
+            val name = AutoBackupRules.fileName(LocalDateTime.now())
+            val document = DocumentsContract.createDocument(resolver, dir, "application/zip", name)
+                ?: throw IOException("création impossible")
+            val output = resolver.openOutputStream(document) ?: throw IOException("écriture impossible")
+            output.use { writeBackup(it, tracks) }
+            // Rotation : seulement les fichiers d'Ongaku, jamais ceux du dossier qui ne sont pas à lui.
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(folder, DocumentsContract.getDocumentId(dir))
+            val existing = HashMap<String, String>()
+            resolver.query(
+                children,
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null,
+            )?.use { cursor ->
+                while (cursor.moveToNext()) existing[cursor.getString(1)] = cursor.getString(0)
+            }
+            AutoBackupRules.toDelete(existing.keys.toList(), settings.keep).forEach { old ->
+                existing[old]?.let { id ->
+                    runCatching { DocumentsContract.deleteDocument(resolver, DocumentsContract.buildDocumentUriUsingTree(folder, id)) }
+                }
+            }
+            settings.lastRunMs = now
+            settings.lastFailed = false
+            true
+        } catch (e: Exception) {
+            // Dossier supprimé, accès retiré, stockage plein : signalé dans les réglages.
+            Log.w("OngakuBackup", "sauvegarde automatique impossible", e)
+            settings.lastFailed = true
+            false
+        }
+    }
+
+    /** Archive complète : listes, écoutes, réglages et images de fond. */
+    private fun writeBackup(output: OutputStream, tracks: List<Track>) {
+        val data = _state.value
+        val history = ListeningHistory.get(app)
+        val counts = PlayCounts(app)
+        // Images de fond : copiées telles quelles dans l'archive, une seule fois chacune.
+        val images = LinkedHashMap<String, File>()
+        fun image(name: String?): String? {
+            val file = backgroundFile(name)?.takeIf { it.isFile } ?: return null
+            return (BackupArchive.IMAGES_DIR + file.name).also { images[it] = file }
+        }
+        val extras = PlaylistBackup.Extras(
+            playCounts = counts.all(),
+            lastPlayed = counts.lastPlayed(),
+            // Seulement les réglages qui existent : une section vide ne créerait rien d'utile.
+            settings = PlaylistBackup.SETTINGS_FILES
+                .associateWith { app.getSharedPreferences(it, Context.MODE_PRIVATE).all }
+                .filterValues { it.isNotEmpty() },
+            appImage = image(data.appBackground),
+            playerImage = image(data.playerBackground),
+            widgetImage = image(data.widgetBackground),
+            trackImages = data.trackBackgrounds.mapNotNull { (id, name) -> image(name)?.let { id to it } }.toMap(),
+        )
+        val json = PlaylistBackup.serialize(data, tracks, history.plays.value, history.days.value, extras)
+        BackupArchive.write(output, json, images)
     }
 
     /** Fusionne la sauvegarde avec l'existant : un import n'efface jamais rien. */

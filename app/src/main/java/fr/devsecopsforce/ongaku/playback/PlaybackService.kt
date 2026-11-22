@@ -22,6 +22,7 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import fr.devsecopsforce.ongaku.LockScreenActivity
 import fr.devsecopsforce.ongaku.data.ListeningHistory
+import fr.devsecopsforce.ongaku.ui.AppDataRepository
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import kotlinx.coroutines.CoroutineScope
@@ -112,6 +113,8 @@ class PlaybackService : MediaLibraryService() {
         )
         sleepTimer = SleepTimer(settings) { crossfade }
         settings.prefs.registerOnSharedPreferenceChangeListener(settingsListener)
+        // Lecture lancée sans ouvrir Ongaku (Bluetooth, voiture) : la sauvegarde due part aussi.
+        AppDataRepository.get(this).autoBackupIfDue()
     }
 
     /**
