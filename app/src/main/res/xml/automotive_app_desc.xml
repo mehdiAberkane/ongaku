@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ongaku dans Android Auto : lecture de musique seulement. -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

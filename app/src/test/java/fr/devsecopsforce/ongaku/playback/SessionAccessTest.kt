@@ -24,4 +24,16 @@ class SessionAccessTest {
         // Un nom proche ne suffit pas.
         assertFalse(SessionAccess.allowed("$own.faux", own, trusted = false))
     }
-}
+
+    @Test
+    fun `Android Auto installé avec le système se connecte`() {
+        assertTrue(SessionAccess.allowed("com.google.android.projection.gearhead", own, trusted = false, systemApp = true))
+        assertTrue(SessionAccess.allowed("com.google.android.googlequicksearchbox", own, trusted = false, systemApp = true))
+    }
+
+    @Test
+    fun `une application installée à part sous le nom d'Android Auto est refusée`() {
+        assertFalse(SessionAccess.allowed("com.google.android.projection.gearhead", own, trusted = false, systemApp = false))
+        // Une application système quelconque n'en profite pas.
+        assertFalse(SessionAccess.allowed("com.example.systeme", own, trusted = false, systemApp = true))
+    }}
