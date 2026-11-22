@@ -40,9 +40,10 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
 - **Apparence** : couleurs du système ou couleur personnalisée, noir pur pour écran OLED, images de
   fond (générale ou par morceau) avec flou et assombrissement, taille du texte, affichage compact.
 - **Filtres** : extensions de fichier affichées, dossiers surveillés, durée minimale et maximale.
-- **Sauvegarde** : export et import des playlists, favoris, listes par règle et de l'historique
-  d'écoute dans un fichier JSON. Les morceaux sont retrouvés par leurs tags, donc la sauvegarde
-  fonctionne d'un téléphone à l'autre.
+- **Sauvegarde complète** : une archive ZIP avec les playlists, favoris, listes par règle,
+  historique et compteurs d'écoute, réglages, apparence, filtres, égaliseur et images de fond.
+  Les morceaux sont retrouvés par leurs tags, donc la sauvegarde fonctionne d'un téléphone à
+  l'autre ; l'import ajoute sans rien effacer. Les anciennes sauvegardes JSON s'importent encore.
 
 Les playlists, favoris et réglages restent dans le stockage privé de l'application : Ongaku n'écrit
 jamais dans les fichiers audio.

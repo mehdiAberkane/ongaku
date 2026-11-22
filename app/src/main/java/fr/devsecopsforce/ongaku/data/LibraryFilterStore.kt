@@ -38,6 +38,11 @@ class LibraryFilterStore private constructor(context: Context) {
     private val _state = MutableStateFlow(load())
     val state: StateFlow<LibraryFilter> = _state.asStateFlow()
 
+    /** Relit les préférences, après la restauration d'une sauvegarde. */
+    fun reload() {
+        _state.value = load()
+    }
+
     fun update(transform: (LibraryFilter) -> LibraryFilter) {
         val updated = transform(_state.value)
         _state.value = updated

@@ -83,7 +83,7 @@ fun SettingsScreen(
         )
     }
     val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json"),
+        ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri -> uri?.let(onExport) }
     val importer = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -202,16 +202,18 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         SectionTitle(stringResource(R.string.settings_backup))
+        Hint(stringResource(R.string.settings_backup_note))
         Hint(stringResource(R.string.settings_backup_drive_note))
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = { exporter.launch("ongaku-sauvegarde-${LocalDate.now()}.json") }) {
+            Button(onClick = { exporter.launch("ongaku-sauvegarde-${LocalDate.now()}.zip") }) {
                 Text(stringResource(R.string.settings_export))
             }
             OutlinedButton(
                 onClick = {
                     importer.launch(
-                        arrayOf("application/json", "application/octet-stream", "text/plain"),
+                        // Archive complète, ou ancienne sauvegarde JSON.
+                        arrayOf("application/zip", "application/json", "application/octet-stream", "text/plain"),
                     )
                 },
             ) { Text(stringResource(R.string.settings_import)) }

@@ -2,6 +2,12 @@ package fr.devsecopsforce.ongaku.ui
 
 import android.app.Application
 import android.content.Context
+import android.graphics.BitmapFactory
+import androidx.core.content.edit
+import fr.devsecopsforce.ongaku.data.AppearanceStore
+import fr.devsecopsforce.ongaku.data.BackupArchive
+import fr.devsecopsforce.ongaku.data.LibraryFilterStore
+import fr.devsecopsforce.ongaku.data.PlayCounts
 import android.net.Uri
 import android.widget.Toast
 import androidx.annotation.StringRes
@@ -9,7 +15,6 @@ import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
 import fr.devsecopsforce.ongaku.data.BackgroundImage
-import fr.devsecopsforce.ongaku.data.ImportLimits
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.ListeningHistory
 import fr.devsecopsforce.ongaku.data.Playlist
@@ -211,11 +216,31 @@ class AppDataRepository private constructor(private val app: Application) {
         scope.launch {
             loading.join()
             try {
+                val data = _state.value
                 val history = ListeningHistory.get(app)
-                val text = PlaylistBackup.serialize(_state.value, tracks, history.plays.value, history.days.value)
+                val counts = PlayCounts(app)
+                // Images de fond : copiées telles quelles dans l'archive, une seule fois chacune.
+                val images = LinkedHashMap<String, File>()
+                fun image(name: String?): String? {
+                    val file = backgroundFile(name)?.takeIf { it.isFile } ?: return null
+                    return (BackupArchive.IMAGES_DIR + file.name).also { images[it] = file }
+                }
+                val extras = PlaylistBackup.Extras(
+                    playCounts = counts.all(),
+                    lastPlayed = counts.lastPlayed(),
+                    // Seulement les réglages qui existent : une section vide ne créerait rien d'utile.
+                    settings = PlaylistBackup.SETTINGS_FILES
+                        .associateWith { app.getSharedPreferences(it, Context.MODE_PRIVATE).all }
+                        .filterValues { it.isNotEmpty() },
+                    appImage = image(data.appBackground),
+                    playerImage = image(data.playerBackground),
+                    widgetImage = image(data.widgetBackground),
+                    trackImages = data.trackBackgrounds.mapNotNull { (id, name) -> image(name)?.let { id to it } }.toMap(),
+                )
+                val json = PlaylistBackup.serialize(data, tracks, history.plays.value, history.days.value, extras)
                 val output = app.contentResolver.openOutputStream(target)
                     ?: throw IOException("destination inaccessible")
-                output.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                output.use { BackupArchive.write(it, json, images) }
                 toast(R.string.backup_exported)
             } catch (e: IOException) {
                 toast(R.string.backup_export_failed)
@@ -228,15 +253,15 @@ class AppDataRepository private constructor(private val app: Application) {
     /** Fusionne la sauvegarde avec l'existant : un import n'efface jamais rien. */
     fun importBackup(source: Uri, tracks: List<Track>) {
         scope.launch {
+            val contents: BackupArchive.Contents
             val imported = try {
                 val input = app.contentResolver.openInputStream(source)
                     ?: throw IOException("fichier illisible")
-                val bytes = input.use { ImportLimits.readLimited(it, ImportLimits.MAX_BACKUP_BYTES) }
-                if (bytes == null) {
-                    toast(R.string.backup_too_large)
-                    return@launch
-                }
-                PlaylistBackup.parse(String(bytes, Charsets.UTF_8), tracks)
+                contents = input.use { BackupArchive.read(it) }
+                PlaylistBackup.parse(contents.json, tracks)
+            } catch (e: BackupArchive.TooLargeException) {
+                toast(R.string.backup_too_large)
+                return@launch
             } catch (e: JSONException) {
                 toast(R.string.backup_not_ongaku)
                 return@launch
@@ -247,10 +272,29 @@ class AppDataRepository private constructor(private val app: Application) {
                 toast(R.string.backup_read_failed)
                 return@launch
             }
+            // Seules les images qui trouveront une place libre sont copiées, et seulement si ce sont
+            // bien des images.
+            val saved = HashMap<String, String>()
+            PlaylistBackup.neededImages(_state.value, imported).forEach { path ->
+                val bytes = contents.images[path] ?: return@forEach
+                if (!isImage(bytes)) return@forEach
+                val name = "${UUID.randomUUID()}.img"
+                try {
+                    backgroundsDir.mkdirs()
+                    SafeFile.write(File(backgroundsDir, name), bytes)
+                    saved[path] = name
+                } catch (e: IOException) {
+                    // Image perdue, le reste de l'import continue.
+                }
+            }
             applyChange { data ->
-                PlaylistBackup.merge(data, imported) { UUID.randomUUID().toString() }
+                val merged = PlaylistBackup.merge(data, imported) { UUID.randomUUID().toString() }
+                PlaylistBackup.mergeImages(merged, imported, saved)
             }
             ListeningHistory.get(app).merge(imported.history, imported.listeningDays)
+            PlayCounts(app).mergeMax(imported.playCounts)
+            restoreSettings(imported.settings)
+            WidgetDisplay.render(app)
             val missing = if (imported.missingTracks > 0) {
                 app.getString(R.string.backup_import_missing, imported.missingTracks)
             } else {
@@ -258,6 +302,44 @@ class AppDataRepository private constructor(private val app: Application) {
             }
             toast(R.string.backup_import_done, imported.playlists.size, missing)
         }
+    }
+
+    /**
+     * Réglages d'une sauvegarde : repris tels quels, sauf le temps total d'écoute, dont on garde le
+     * plus grand (réimporter sur le même téléphone ne le double pas). Les réglages déjà chargés en
+     * mémoire (apparence, filtres) sont relus aussitôt.
+     */
+    private fun restoreSettings(settings: Map<String, Map<String, Any>>) {
+        if (settings.isEmpty()) return
+        settings.forEach { (name, values) ->
+            if (name !in PlaylistBackup.SETTINGS_FILES || values.isEmpty()) return@forEach
+            val prefs = app.getSharedPreferences(name, Context.MODE_PRIVATE)
+            prefs.edit(commit = true) {
+                values.forEach { (key, value) ->
+                    if (name == SETTINGS_PREFS && key == LISTENED_KEY) {
+                        if (value is Long && value > prefs.getLong(key, 0L)) putLong(key, value)
+                        return@forEach
+                    }
+                    when (value) {
+                        is Boolean -> putBoolean(key, value)
+                        is Int -> putInt(key, value)
+                        is Long -> putLong(key, value)
+                        is Float -> putFloat(key, value)
+                        is String -> putString(key, value)
+                        is Set<*> -> putStringSet(key, value.filterIsInstance<String>().toSet())
+                    }
+                }
+            }
+        }
+        AppearanceStore.get(app).reload()
+        LibraryFilterStore.get(app).reload()
+    }
+
+    /** Une image que le téléphone sait décoder : un autre fichier glissé dans l'archive est ignoré. */
+    private fun isImage(bytes: ByteArray): Boolean {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        return options.outWidth > 0 && options.outHeight > 0
     }
 
     /**
@@ -357,6 +439,8 @@ class AppDataRepository private constructor(private val app: Application) {
     companion object {
         /** Une image en cours d'enregistrement n'est inscrite dans les données qu'à la fin. */
         private const val ORPHAN_MIN_AGE_MS = 60L * 60 * 1000
+        private const val SETTINGS_PREFS = "ongaku_settings"
+        private const val LISTENED_KEY = "listened_ms"
 
         @Volatile
         private var instance: AppDataRepository? = null

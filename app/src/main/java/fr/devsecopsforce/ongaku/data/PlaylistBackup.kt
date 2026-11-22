@@ -11,7 +11,30 @@ import org.json.JSONObject
  */
 object PlaylistBackup {
     private const val FORMAT = "ongaku-backup"
-    private const val VERSION = 1
+    /** 2 : sauvegarde complète (réglages, écoutes, images), dans une archive ([BackupArchive]). */
+    private const val VERSION = 2
+
+    /** Fichiers de préférences emportés : lecture, apparence, filtres, tri, égaliseur. */
+    val SETTINGS_FILES = listOf(
+        "ongaku_settings",
+        "ongaku_appearance",
+        "ongaku_library_filter",
+        "ongaku_library_sort",
+        "ongaku_equalizer",
+    )
+
+    /** Ce que la sauvegarde complète ajoute aux listes et à l'historique. */
+    data class Extras(
+        val playCounts: Map<Long, Int> = emptyMap(),
+        val lastPlayed: Map<Long, Long> = emptyMap(),
+        /** Préférences par fichier, parmi [SETTINGS_FILES]. */
+        val settings: Map<String, Map<String, *>> = emptyMap(),
+        /** Chemins des images de fond dans l'archive. */
+        val appImage: String? = null,
+        val playerImage: String? = null,
+        val widgetImage: String? = null,
+        val trackImages: Map<Long, String> = emptyMap(),
+    )
 
     data class Imported(
         val favorites: Set<Long>,
@@ -22,6 +45,14 @@ object PlaylistBackup {
         /** Historique d'écoute ; l'identifiant vaut 0 pour un morceau absent de ce téléphone. */
         val history: List<Play> = emptyList(),
         val listeningDays: Map<LocalDate, Long> = emptyMap(),
+        /** Écoutes par morceau de ce téléphone : nombre et heure de la dernière. */
+        val playCounts: Map<Long, Pair<Int, Long>> = emptyMap(),
+        val settings: Map<String, Map<String, Any>> = emptyMap(),
+        val appImage: String? = null,
+        val playerImage: String? = null,
+        val widgetImage: String? = null,
+        /** Image de fond par morceau de ce téléphone : chemin dans l'archive. */
+        val trackImages: Map<Long, String> = emptyMap(),
     )
 
     fun serialize(
@@ -29,6 +60,7 @@ object PlaylistBackup {
         tracks: List<Track>,
         history: List<Play> = emptyList(),
         listeningDays: Map<LocalDate, Long> = emptyMap(),
+        extras: Extras = Extras(),
     ): String {
         val byId = tracks.associateBy { it.id }
         fun refs(ids: Iterable<Long>) = JSONArray(ids.mapNotNull(byId::get).map(::toRef))
@@ -56,6 +88,31 @@ object PlaylistBackup {
                 ),
             )
             .put("history", historyJson(history, listeningDays))
+            .put(
+                "playCounts",
+                JSONArray(
+                    (extras.playCounts.keys + extras.lastPlayed.keys).mapNotNull(byId::get).map { track ->
+                        toRef(track).put("count", extras.playCounts[track.id] ?: 0).put("last", extras.lastPlayed[track.id] ?: 0L)
+                    },
+                ),
+            )
+            .put(
+                "settings",
+                JSONObject().apply {
+                    extras.settings.filterKeys { it in SETTINGS_FILES }.forEach { (name, values) -> put(name, PrefsCodec.encode(values)) }
+                },
+            )
+            .put(
+                "images",
+                JSONObject()
+                    .put("app", extras.appImage ?: JSONObject.NULL)
+                    .put("player", extras.playerImage ?: JSONObject.NULL)
+                    .put("widget", extras.widgetImage ?: JSONObject.NULL)
+                    .put(
+                        "tracks",
+                        JSONArray(extras.trackImages.mapNotNull { (id, path) -> byId[id]?.let { toRef(it).put("path", path) } }),
+                    ),
+            )
             .toString(2)
     }
 
@@ -147,7 +204,40 @@ object PlaylistBackup {
                 runCatching { LocalDate.parse(key) to json.getLong(key) }.getOrNull()
             }.toMap()
         }.orEmpty()
-        return Imported(favorites, playlists, missing, ruleLists, history, days)
+        fun trackOf(ref: JSONObject): Track? {
+            val title = ref.getString("title").norm()
+            val artist = ref.getString("artist").norm()
+            return exact[Triple(title, artist, ref.getString("album").norm())] ?: loose[title to artist]
+        }
+        // Absents des sauvegardes d'avant la sauvegarde complète.
+        val playCounts = root.optJSONArray("playCounts")?.let { array ->
+            buildMap {
+                for (index in 0 until array.length()) {
+                    val entry = array.getJSONObject(index)
+                    val track = trackOf(entry) ?: continue
+                    put(track.id, entry.optInt("count") to entry.optLong("last"))
+                }
+            }
+        }.orEmpty()
+        val settings = root.optJSONObject("settings")?.let { json ->
+            SETTINGS_FILES.mapNotNull { name -> json.optJSONObject(name)?.let { name to PrefsCodec.decode(it) } }.toMap()
+        }.orEmpty()
+        val images = root.optJSONObject("images")
+        fun imagePath(key: String) = images?.optString(key)?.takeIf { BackupArchive.isSafeImagePath(it) }
+        val trackImages = images?.optJSONArray("tracks")?.let { array ->
+            buildMap {
+                for (index in 0 until array.length()) {
+                    val entry = array.getJSONObject(index)
+                    val path = entry.optString("path").takeIf { BackupArchive.isSafeImagePath(it) } ?: continue
+                    val track = trackOf(entry) ?: continue
+                    put(track.id, path)
+                }
+            }
+        }.orEmpty()
+        return Imported(
+            favorites, playlists, missing, ruleLists, history, days,
+            playCounts, settings, imagePath("app"), imagePath("player"), imagePath("widget"), trackImages,
+        )
     }
 
     /**
@@ -171,6 +261,35 @@ object PlaylistBackup {
             .filter { rule -> data.ruleLists.none { it.name.trim().equals(rule.name.trim(), ignoreCase = true) } }
             .map { it.copy(id = newId(), name = it.name.trim()) }
         return data.copy(favorites = data.favorites + imported.favorites, playlists = playlists, ruleLists = ruleLists)
+    }
+
+    /**
+     * Images de fond de la sauvegarde, déjà copiées ([saved] : chemin dans l'archive → nom du
+     * fichier enregistré) : elles ne prennent que les places libres, sans jamais remplacer une image
+     * déjà choisie sur ce téléphone.
+     */
+    fun mergeImages(data: AppData, imported: Imported, saved: Map<String, String>): AppData {
+        return mergeImagesInto(data, imported, saved)
+    }
+
+    /** Images de la sauvegarde qui trouveront une place libre : seules celles-ci sont copiées. */
+    fun neededImages(data: AppData, imported: Imported): Set<String> = buildSet {
+        if (data.appBackground == null) imported.appImage?.let(::add)
+        if (data.playerBackground == null) imported.playerImage?.let(::add)
+        if (data.widgetBackground == null) imported.widgetImage?.let(::add)
+        imported.trackImages.forEach { (id, path) -> if (id !in data.trackBackgrounds) add(path) }
+    }
+
+    private fun mergeImagesInto(data: AppData, imported: Imported, saved: Map<String, String>): AppData {
+        fun pick(current: String?, path: String?) = current ?: path?.let(saved::get)
+        val tracks = data.trackBackgrounds.toMutableMap()
+        imported.trackImages.forEach { (id, path) -> if (id !in tracks) saved[path]?.let { tracks[id] = it } }
+        return data.copy(
+            appBackground = pick(data.appBackground, imported.appImage),
+            playerBackground = pick(data.playerBackground, imported.playerImage),
+            widgetBackground = pick(data.widgetBackground, imported.widgetImage),
+            trackBackgrounds = tracks,
+        )
     }
 
     private fun String.norm() = trim().lowercase()
