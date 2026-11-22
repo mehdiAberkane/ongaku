@@ -23,7 +23,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Recréée après une rotation : la demande a déjà été lancée.
-        if (savedInstanceState == null) handleVoiceSearch(intent)
+        if (savedInstanceState == null) {
+            handleVoiceSearch(intent)
+            // Sauvegarde automatique, si elle est due (rien sinon).
+            appData.autoBackupIfDue()
+        }
         setContent {
             OngakuTheme {
                 OngakuApp(libraryViewModel, playerViewModel, appData)

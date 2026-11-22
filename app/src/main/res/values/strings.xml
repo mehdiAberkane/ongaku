@@ -434,4 +434,26 @@
     <!-- Deux colonnes -->
     <string name="player_nothing_playing">Choisis un morceau : il s\'affichera ici.</string>
 
+    <!-- Sauvegarde automatique -->
+    <string name="auto_backup_title">Sauvegarde automatique</string>
+    <string name="auto_backup_note">Une sauvegarde complète datée, écrite dans un dossier de ton choix quand Ongaku s\'ouvre ou que la lecture démarre. Ce dossier peut être synchronisé par une autre application (Drive, Syncthing…) ; Ongaku, lui, n\'utilise pas Internet.</string>
+    <string name="auto_backup_choose">Choisir le dossier</string>
+    <string name="auto_backup_change">Changer de dossier</string>
+    <string name="auto_backup_folder">Dossier : %1$s</string>
+    <string name="auto_backup_every">Fréquence</string>
+    <string name="auto_backup_daily">Chaque jour</string>
+    <string name="auto_backup_weekly">Chaque semaine</string>
+    <string name="auto_backup_monthly">Chaque mois</string>
+    <string name="auto_backup_keep">Garder les dernières</string>
+    <plurals name="auto_backup_keep_count">
+        <item quantity="one">%1$d sauvegarde</item>
+        <item quantity="many">%1$d sauvegardes</item>
+        <item quantity="other">%1$d sauvegardes</item>
+    </plurals>
+    <string name="auto_backup_last">Dernière sauvegarde : %1$s</string>
+    <string name="auto_backup_never">Aucune sauvegarde automatique pour l\'instant.</string>
+    <string name="auto_backup_failed_status">La dernière sauvegarde a échoué : vérifie que le dossier existe encore, ou choisis-en un autre.</string>
+    <string name="auto_backup_now">Sauvegarder maintenant</string>
+    <string name="auto_backup_done">Sauvegarde enregistrée dans le dossier.</string>
+    <string name="auto_backup_failed">Sauvegarde impossible dans ce dossier.</string>
 </resources>

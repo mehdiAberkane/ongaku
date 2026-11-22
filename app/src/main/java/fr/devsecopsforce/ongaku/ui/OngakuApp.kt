@@ -501,6 +501,7 @@ fun OngakuApp(
                                 onExport = { appData.exportBackup(it, library.allTracks) },
                                 onImport = { appData.importBackup(it, library.allTracks) },
                                 onOpenEqualizer = { detail = Detail.Equalizer },
+                            onAutoBackupNow = appData::autoBackupNow,
                                 smartSize = smartSize,
                                 onSmartSizeChange = {
                                     smartSize = it

@@ -44,6 +44,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
   historique et compteurs d'écoute, réglages, apparence, filtres, égaliseur et images de fond.
   Les morceaux sont retrouvés par leurs tags, donc la sauvegarde fonctionne d'un téléphone à
   l'autre ; l'import ajoute sans rien effacer. Les anciennes sauvegardes JSON s'importent encore.
+- **Sauvegarde automatique** : chaque jour, semaine ou mois, dans un dossier choisi une fois
+  (éventuellement synchronisé par une autre application) ; les N dernières sont gardées.
 
 Les playlists, favoris et réglages restent dans le stockage privé de l'application : Ongaku n'écrit
 jamais dans les fichiers audio.
