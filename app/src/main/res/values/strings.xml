@@ -106,6 +106,8 @@
     <string name="library_tab_artists">Artistes</string>
     <string name="library_tab_playlists">Listes</string>
     <string name="library_tab_folders">Dossiers</string>
+    <string name="library_tab_genres">Genres</string>
+    <string name="library_tab_decades">Années</string>
     <string name="library_play">Lire</string>
     <string name="library_shuffle">Lecture aléatoire</string>
     <string name="library_sort_by">Trier par : %1$s</string>
@@ -363,4 +365,10 @@
         <item quantity="many">Lire seulement les %1$d titres de ce dossier</item>
         <item quantity="other">Lire seulement les %1$d titres de ce dossier</item>
     </plurals>
+    <!-- Genres, années, grille -->
+    <string name="library_unknown_genre">Genre inconnu</string>
+    <string name="library_unknown_year">Année inconnue</string>
+    <string name="library_decade">Années %1$d</string>
+    <string name="library_albums_as_grid">Afficher les albums en grille</string>
+    <string name="library_albums_as_list">Afficher les albums en liste</string>
 </resources>

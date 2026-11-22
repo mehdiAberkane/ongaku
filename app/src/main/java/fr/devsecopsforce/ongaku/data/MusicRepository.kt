@@ -3,6 +3,7 @@ package fr.devsecopsforce.ongaku.data
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
@@ -33,6 +34,8 @@ data class Track(
     val albumArtist: String = "",
     /** Tag artiste absent : [artist] contient alors le libellé « Artiste inconnu ». */
     val artistMissing: Boolean = false,
+    /** Tag genre tel quel, éventuellement plusieurs séparés par « ; » ; vide s'il manque (voir [genreNames]). */
+    val genre: String = "",
 ) {
     /** Numéro de disque : MediaStore l'encode dans les milliers du numéro de piste ; 0 s'il manque. */
     val discNumber: Int get() = trackNumber / 1000
@@ -58,7 +61,10 @@ fun mediaItem(id: Long, title: String, artist: String, album: String, artworkUri
 class MusicRepository(private val context: Context) {
 
     suspend fun loadTracks(): List<Track> = withContext(Dispatchers.IO) {
-        val projection = arrayOf(
+        // Le genre n'est dans la table des morceaux que depuis Android 11 ; avant, il faudrait une
+        // requête par genre : on s'en passe, les morceaux restent alors sans genre.
+        val withGenre = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+        val projection = listOfNotNull(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
@@ -71,7 +77,8 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.DATA,
             ALBUM_ARTIST,
-        )
+            GENRE.takeIf { withGenre },
+        ).toTypedArray()
         val tracks = mutableListOf<Track>()
         // Libellés lus une fois pour toute la bibliothèque.
         val untitled = context.getString(R.string.library_untitled)
@@ -97,6 +104,7 @@ class MusicRepository(private val context: Context) {
             val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             val albumArtistColumn = cursor.getColumnIndex(ALBUM_ARTIST)
+            val genreColumn = if (withGenre) cursor.getColumnIndex(GENRE) else -1
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -129,6 +137,10 @@ class MusicRepository(private val context: Context) {
                         ?.takeUnless { it == MediaStore.UNKNOWN_STRING }
                         .orEmpty(),
                     artistMissing = artist == null,
+                    genre = genreColumn.takeIf { it >= 0 }
+                        ?.let(cursor::getString)
+                        ?.takeUnless { it == MediaStore.UNKNOWN_STRING }
+                        .orEmpty(),
                 )
             }
         }
@@ -142,6 +154,9 @@ class MusicRepository(private val context: Context) {
 
         /** Colonne présente depuis longtemps, mais sa constante publique date d'Android 11. */
         const val ALBUM_ARTIST = "album_artist"
+
+        /** MediaStore.Audio.AudioColumns.GENRE, Android 11 et plus. */
+        const val GENRE = "genre"
         val ALBUM_ART_URI: Uri = "content://media/external/audio/albumart".toUri()
     }
 }

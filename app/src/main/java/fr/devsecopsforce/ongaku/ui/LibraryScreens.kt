@@ -5,10 +5,13 @@ package fr.devsecopsforce.ongaku.ui
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,17 +23,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
@@ -44,7 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -117,6 +125,10 @@ internal fun LibraryTabs(
     existingIds: Set<Long>,
     folders: FolderTree.View,
     onOpenFolder: (String) -> Unit,
+    genres: List<TrackGroup>,
+    decades: List<TrackGroup>,
+    albumGrid: Boolean,
+    onAlbumGridChange: (Boolean) -> Unit,
 ) {
     // Index par lettre seulement quand la liste est rangée par ordre alphabétique.
     val trackLetters = remember(tracks, trackSort) {
@@ -129,7 +141,8 @@ internal fun LibraryTabs(
 
     Column(Modifier.fillMaxSize()) {
         PlayAllButtons(onPlayAll)
-        PrimaryTabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
+        // Sept onglets : la rangée défile au lieu de tasser les titres.
+        PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = Color.Transparent, edgePadding = 8.dp) {
             LIBRARY_TABS.forEachIndexed { index, title ->
                 Tab(
                     selected = tab == index,
@@ -144,21 +157,33 @@ internal fun LibraryTabs(
                 TrackList(tracks, currentId, actions, onPlay, letters = trackLetters)
             }
             1 -> {
-                SortSelector(AlbumSort.entries, albumSort, { stringResource(it.label) }, onAlbumSortChange)
-                GroupList(
-                    albums,
-                    onOpenGroup,
-                    letters = albumLetters,
-                    subtitle = { album ->
-                        if (albumSort == AlbumSort.YEAR) {
-                            listOfNotNull(album.subtitle, album.year?.toString()).joinToString(" · ")
-                        } else {
-                            album.subtitle
-                        }
-                    },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        SortSelector(AlbumSort.entries, albumSort, { stringResource(it.label) }, onAlbumSortChange)
+                    }
+                    IconButton(onClick = { onAlbumGridChange(!albumGrid) }) {
+                        Icon(
+                            if (albumGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            stringResource(if (albumGrid) R.string.library_albums_as_list else R.string.library_albums_as_grid),
+                        )
+                    }
+                }
+                val albumSubtitle: @Composable (TrackGroup) -> String = { album ->
+                    if (albumSort == AlbumSort.YEAR) {
+                        listOfNotNull(album.subtitle, album.year?.toString()).joinToString(" · ")
+                    } else {
+                        album.subtitle
+                    }
+                }
+                if (albumGrid) {
+                    AlbumGrid(albums, onOpenGroup, albumSubtitle)
+                } else {
+                    GroupList(albums, onOpenGroup, letters = albumLetters, subtitle = albumSubtitle)
+                }
             }
             2 -> GroupList(artists, onOpenGroup, letters = artistLetters, subtitle = { groupSubtitle(it) })
+            5 -> GroupList(genres, onOpenGroup, subtitle = { groupSubtitle(it) })
+            6 -> GroupList(decades, onOpenGroup, subtitle = { groupSubtitle(it) })
             4 -> FolderBrowser(
                 view = folders,
                 allTracks = emptyList(),
@@ -617,4 +642,42 @@ internal val LIBRARY_TABS = listOf(
     R.string.library_tab_artists,
     R.string.library_tab_playlists,
     R.string.library_tab_folders,
+    R.string.library_tab_genres,
+    R.string.library_tab_decades,
 )
+
+/** Albums en grille de pochettes, autant de colonnes que la largeur en permet. */
+@Composable
+internal fun AlbumGrid(
+    albums: List<TrackGroup>,
+    onOpen: (TrackGroup) -> Unit,
+    subtitle: @Composable (TrackGroup) -> String,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 150.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        items(albums, key = { it.key }) { album ->
+            Column(Modifier.clickable { onOpen(album) }) {
+                Artwork(
+                    album.artworkUri,
+                    Modifier.fillMaxWidth().aspectRatio(1f),
+                    iconSize = 48.dp,
+                    icon = Icons.Rounded.Album,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(album.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    subtitle(album),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}

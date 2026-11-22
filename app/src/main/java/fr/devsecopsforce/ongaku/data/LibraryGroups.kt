@@ -17,6 +17,8 @@ data class TrackGroup(
     val year: Int? = null,
     /** Page d'un artiste : ses morceaux sont présentés album par album. */
     val isArtist: Boolean = false,
+    /** Genre ou décennie : une simple suite de morceaux, sous-titrée par leur nombre. */
+    val isCollection: Boolean = false,
 )
 
 /** « A feat. B », « A (ft. B) », « A featuring B » : tout ce qui suit l'artiste principal. */
@@ -85,6 +87,59 @@ fun List<Track>.artists(mergeFeaturing: Boolean = false): List<TrackGroup> =
         }
         .sortedBy { it.title.searchKey() }
 
+/**
+ * Genres d'un tag : plusieurs peuvent être séparés par « ; » (ou par un caractère nul, selon
+ * l'outil qui a écrit le fichier). Sans doublon, sans tenir compte de la casse.
+ */
+fun genreNames(raw: String): List<String> =
+    raw.split(';', '\u0000').map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
+/** Dans un genre ou une décennie : par artiste, puis par album, puis dans l'ordre des pistes. */
+private val byArtistAlbum = compareBy<Track>({ it.artist.searchKey() }, { it.albumKey() }, { it.trackNumber }, { it.title.searchKey() })
+
+/**
+ * Genres, triés par nom ; un morceau à plusieurs genres apparaît dans chacun. Les morceaux sans genre
+ * forment un groupe à la fin, nommé [unknownTitle].
+ */
+fun List<Track>.genres(unknownTitle: String): List<TrackGroup> {
+    val byGenre = LinkedHashMap<String, MutableList<Pair<String, Track>>>()
+    val unknown = mutableListOf<Track>()
+    for (track in this) {
+        val names = genreNames(track.genre)
+        if (names.isEmpty()) unknown += track
+        names.forEach { byGenre.getOrPut(it.lowercase()) { mutableListOf() } += it to track }
+    }
+    val known = byGenre.map { (key, entries) ->
+        val tracks = entries.map { it.second }.sortedWith(byArtistAlbum)
+        collection("genre:$key", entries.groupingBy { it.first }.eachCount().maxBy { it.value }.key, tracks)
+    }.sortedBy { it.title.searchKey() }
+    return if (unknown.isEmpty()) known else known + collection("genre:", unknownTitle, unknown.sortedWith(byArtistAlbum))
+}
+
+/** Décennie d'une année : 1994 → 1990 ; null si l'année est absente ou invraisemblable. */
+fun decadeOf(year: Int): Int? = if (year in 1000..9999) year / 10 * 10 else null
+
+/**
+ * Décennies, de la plus ancienne à la plus récente, nommées par [label] (« Années 1990 ») ; les
+ * morceaux sans année forment un groupe à la fin, nommé [unknownTitle].
+ */
+fun List<Track>.decades(label: (Int) -> String, unknownTitle: String): List<TrackGroup> {
+    val (dated, undated) = partition { decadeOf(it.year) != null }
+    val byYear = compareBy<Track> { it.year }.then(byArtistAlbum)
+    val groups = dated.groupBy { decadeOf(it.year)!! }.toSortedMap()
+        .map { (decade, tracks) -> collection("decade:$decade", label(decade), tracks.sortedWith(byYear)) }
+    return if (undated.isEmpty()) groups else groups + collection("decade:", unknownTitle, undated.sortedWith(byArtistAlbum))
+}
+
+private fun collection(key: String, title: String, tracks: List<Track>) = TrackGroup(
+    key = key,
+    title = title,
+    subtitle = "",
+    artworkUri = tracks.first().artworkUri,
+    tracks = tracks,
+    isCollection = true,
+)
+
 private fun Track.albumKey() = album.trim().lowercase()
 
 private fun List<Track>.byAlbum(): List<Track> = groupBy { it.albumKey() }
@@ -129,6 +184,7 @@ fun TrackGroup.rows(): List<GroupRow> {
     val rows = mutableListOf<GroupRow>()
     var index = 0
     // Les morceaux d'un même album se suivent (voir [byAlbum]).
+    if (isCollection) return tracks.mapIndexed { index, track -> GroupRow.Song(track, index) }
     val albums = if (isArtist) tracks.chunkedBy { it.albumKey() } else listOf(tracks)
     for (album in albums) {
         val first = album.first()

@@ -19,6 +19,7 @@ internal fun track(
     sizeBytes: Long = 1_000L + id,
     albumArtist: String = "",
     artistMissing: Boolean = false,
+    genre: String = "",
 ) = Track(
     id = id,
     title = title,
@@ -37,6 +38,7 @@ internal fun track(
     relativePath = relativePath,
     albumArtist = albumArtist,
     artistMissing = artistMissing,
+    genre = genre,
 )
 
 /** Le même fichier, auquel Android a donné un autre identifiant. */
