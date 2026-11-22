@@ -85,7 +85,7 @@ class PlaybackService : MediaLibraryService() {
         if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) effects = AudioEffects(this, audioSessionId)
 
         val launchIntent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
-        val builder = MediaLibrarySession.Builder(this, player, ResumptionCallback(this, scope, autoplay) { sleepTimer })
+        val builder = MediaLibrarySession.Builder(this, player, ResumptionCallback(this, scope, autoplay, { sleepTimer }, ::isCarSystemApp))
         if (launchIntent != null) {
             builder.setSessionActivity(
                 PendingIntent.getActivity(
@@ -135,11 +135,12 @@ class PlaybackService : MediaLibraryService() {
     /** Voir [SessionAccess] : les autres applications reçoivent null et ne peuvent pas se connecter. */
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
         val pkg = controllerInfo.packageName
-        val systemApp = pkg in SessionAccess.CAR_PACKAGES && isSystemApp(pkg)
-        return session.takeIf { SessionAccess.allowed(pkg, packageName, controllerInfo.isTrusted, systemApp) }
+        return session.takeIf { SessionAccess.bindingAllowed(pkg, packageName, controllerInfo.isTrusted, isCarSystemApp(pkg)) }
     }
 
     /** Installée avec le système (éventuellement mise à jour depuis) : voir [SessionAccess.CAR_PACKAGES]. */
+    private fun isCarSystemApp(pkg: String): Boolean = pkg in SessionAccess.CAR_PACKAGES && isSystemApp(pkg)
+
     private fun isSystemApp(pkg: String): Boolean = try {
         val flags = packageManager.getApplicationInfo(pkg, 0).flags
         flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0

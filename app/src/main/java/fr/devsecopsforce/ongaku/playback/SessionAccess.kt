@@ -21,4 +21,15 @@ object SessionAccess {
 
     fun allowed(controllerPackage: String, ownPackage: String, trusted: Boolean, systemApp: Boolean = false): Boolean =
         trusted || controllerPackage == ownPackage || (controllerPackage in CAR_PACKAGES && systemApp)
+
+    /**
+     * Nom générique sous lequel Media3 demande la session quand une application se lie par
+     * l'ancienne interface de navigation (Android Auto) : le vrai demandeur n'est connu qu'ensuite,
+     * et c'est lui que [allowed] juge alors (voir ResumptionCallback.onConnect).
+     */
+    const val LEGACY_BINDING = "android.media.session.MediaController"
+
+    /** Liaison au service : la règle complète, sauf pour la liaison par l'ancienne interface. */
+    fun bindingAllowed(controllerPackage: String, ownPackage: String, trusted: Boolean, systemApp: Boolean = false): Boolean =
+        controllerPackage == LEGACY_BINDING || allowed(controllerPackage, ownPackage, trusted, systemApp)
 }
