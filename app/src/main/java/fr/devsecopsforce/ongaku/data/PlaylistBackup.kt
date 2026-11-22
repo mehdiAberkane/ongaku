@@ -16,6 +16,8 @@ object PlaylistBackup {
         val favorites: Set<Long>,
         val playlists: List<Pair<String, List<Long>>>,
         val missingTracks: Int,
+        /** Listes par règle : sans morceau, elles se recopient telles quelles. */
+        val ruleLists: List<RuleList> = emptyList(),
     )
 
     fun serialize(data: AppData, tracks: List<Track>): String {
@@ -30,6 +32,17 @@ object PlaylistBackup {
                 JSONArray(
                     data.playlists.map {
                         JSONObject().put("name", it.name).put("tracks", refs(it.trackIds))
+                    },
+                ),
+            )
+            .put(
+                "ruleLists",
+                JSONArray(
+                    data.ruleLists.map {
+                        JSONObject().put("name", it.name).put("genre", it.genre)
+                            .put("yearFrom", it.yearFrom).put("yearTo", it.yearTo)
+                            .put("minSeconds", it.minSeconds).put("maxSeconds", it.maxSeconds)
+                            .put("folder", it.folder)
                     },
                 ),
             )
@@ -67,7 +80,23 @@ object PlaylistBackup {
                 playlist.getString("name") to resolve(playlist.getJSONArray("tracks"))
             }
         }
-        return Imported(favorites, playlists, missing)
+        // Absent des sauvegardes d'avant les listes par règle.
+        val ruleLists = root.optJSONArray("ruleLists")?.let { array ->
+            List(array.length()) { index ->
+                val rule = array.getJSONObject(index)
+                RuleList(
+                    id = "",
+                    name = rule.getString("name"),
+                    genre = rule.optString("genre"),
+                    yearFrom = rule.optInt("yearFrom"),
+                    yearTo = rule.optInt("yearTo"),
+                    minSeconds = rule.optInt("minSeconds"),
+                    maxSeconds = rule.optInt("maxSeconds"),
+                    folder = rule.optString("folder"),
+                )
+            }
+        }.orEmpty()
+        return Imported(favorites, playlists, missing, ruleLists)
     }
 
     /**
@@ -86,7 +115,11 @@ object PlaylistBackup {
                 playlists += Playlist(newId(), name.trim(), ids)
             }
         }
-        return data.copy(favorites = data.favorites + imported.favorites, playlists = playlists)
+        // Une liste par règle du même nom existe déjà : on la garde telle quelle.
+        val ruleLists = data.ruleLists + imported.ruleLists
+            .filter { rule -> data.ruleLists.none { it.name.trim().equals(rule.name.trim(), ignoreCase = true) } }
+            .map { it.copy(id = newId(), name = it.name.trim()) }
+        return data.copy(favorites = data.favorites + imported.favorites, playlists = playlists, ruleLists = ruleLists)
     }
 
     private fun String.norm() = trim().lowercase()

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Schedule
@@ -90,6 +91,7 @@ import fr.devsecopsforce.ongaku.data.GroupRow
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
 import fr.devsecopsforce.ongaku.data.FolderTree
+import fr.devsecopsforce.ongaku.data.RuleList
 import fr.devsecopsforce.ongaku.data.SmartList
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackGroup
@@ -123,6 +125,9 @@ internal fun LibraryTabs(
     onOpenSmart: (SmartList) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
+    ruleCounts: Map<String, Int>,
+    onOpenRuleList: (RuleList) -> Unit,
+    onCreateRuleList: () -> Unit,
     existingIds: Set<Long>,
     folders: FolderTree.View,
     onOpenFolder: (String) -> Unit,
@@ -203,6 +208,9 @@ internal fun LibraryTabs(
                 onOpenSmart,
                 onOpenPlaylist,
                 onCreatePlaylist,
+                ruleCounts,
+                onOpenRuleList,
+                onCreateRuleList,
             )
         }
     }
@@ -386,6 +394,9 @@ internal fun PlaylistsTab(
     onOpenSmart: (SmartList) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
+    ruleCounts: Map<String, Int>,
+    onOpenRuleList: (RuleList) -> Unit,
+    onCreateRuleList: () -> Unit,
 ) {
     LazyColumn(Modifier.fillMaxSize()) {
         item { SectionHeader(stringResource(R.string.playlists_section_smart)) }
@@ -424,6 +435,25 @@ internal fun PlaylistsTab(
                 artworkUri = null,
                 icon = Icons.AutoMirrored.Rounded.QueueMusic,
                 onClick = { onOpenPlaylist(playlist) },
+            )
+        }
+        item { SectionHeader(stringResource(R.string.rule_section)) }
+        item {
+            ListRow(
+                title = stringResource(R.string.rule_new),
+                subtitle = stringResource(R.string.rule_new_subtitle),
+                artworkUri = null,
+                icon = Icons.Rounded.Add,
+                onClick = onCreateRuleList,
+            )
+        }
+        items(data.ruleLists, key = { "rule:${it.id}" }) { rule ->
+            ListRow(
+                title = rule.name,
+                subtitle = listOf(countLabel(ruleCounts[rule.id] ?: 0), ruleSummary(rule)).joinToString(" · "),
+                artworkUri = null,
+                icon = Icons.Rounded.FilterList,
+                onClick = { onOpenRuleList(rule) },
             )
         }
     }

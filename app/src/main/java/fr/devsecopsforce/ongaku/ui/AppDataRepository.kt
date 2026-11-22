@@ -14,6 +14,7 @@ import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistBackup
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
+import fr.devsecopsforce.ongaku.data.RuleList
 import fr.devsecopsforce.ongaku.data.SafeFile
 import fr.devsecopsforce.ongaku.data.backgroundNames
 import fr.devsecopsforce.ongaku.data.missingTrackBackgrounds
@@ -168,6 +169,19 @@ class AppDataRepository private constructor(private val app: Application) {
 
     fun renamePlaylist(id: String, name: String) = mutateNamed(name, id) { data ->
         data.copy(playlists = data.playlists.map { if (it.id == id) it.copy(name = name.trim()) else it })
+    }
+
+    /** Nouvelle liste par règle si [rule] n'a pas encore d'identifiant, sinon modification. */
+    fun saveRuleList(rule: RuleList) = mutate { data ->
+        if (rule.id.isEmpty()) {
+            data.copy(ruleLists = data.ruleLists + rule.copy(id = UUID.randomUUID().toString()))
+        } else {
+            data.copy(ruleLists = data.ruleLists.map { if (it.id == rule.id) rule else it })
+        }
+    }
+
+    fun deleteRuleList(id: String) = mutate { data ->
+        data.copy(ruleLists = data.ruleLists.filterNot { it.id == id })
     }
 
     fun deletePlaylist(id: String) = mutate { data ->

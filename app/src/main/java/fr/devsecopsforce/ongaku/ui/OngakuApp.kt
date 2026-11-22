@@ -69,6 +69,7 @@ import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
+import fr.devsecopsforce.ongaku.data.RuleList
 import fr.devsecopsforce.ongaku.data.SmartLists
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackSort
@@ -153,6 +154,9 @@ fun OngakuApp(
     var creatingPlaylist by rememberSaveable { mutableStateOf(false) }
     var renamingId by rememberSaveable { mutableStateOf<String?>(null) }
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Liste par règle en cours de modification : "" pour une nouvelle.
+    var editingRuleId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deletingRuleId by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Conservée en texte : le sélecteur d'images peut provoquer la recréation de l'activité.
     var pendingTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -259,6 +263,11 @@ fun OngakuApp(
     }
     val renamingPlaylist = renamingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
     val deletingPlaylist = deletingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
+    val currentRule = (currentDetail as? Detail.RuleListDetail)?.let { open -> data.ruleLists.firstOrNull { it.id == open.id } }
+    val ruleTracks = remember(currentRule, library.tracks) { currentRule?.tracks(library.tracks).orEmpty() }
+    val ruleCounts = remember(data.ruleLists, library.tracks) {
+        data.ruleLists.associate { rule -> rule.id to library.tracks.count(rule::matches) }
+    }
     // Retrouvé dans la bibliothèque actuelle : la page suit un morceau ajouté ou retiré.
     val groupKey = (currentDetail as? Detail.Group)?.key
     val openGroup = remember(groupKey, albums, artists, genres, decades) {
@@ -282,6 +291,7 @@ fun OngakuApp(
         Detail.Favorites -> stringResource(R.string.main_title_favorites)
         is Detail.Smart -> smartTitle(currentDetail.kind, smartSize)
         is Detail.PlaylistDetail -> currentPlaylist?.name.orEmpty()
+        is Detail.RuleListDetail -> currentRule?.name.orEmpty()
         Detail.Settings -> stringResource(R.string.main_title_settings)
         Detail.Stats -> stringResource(R.string.main_title_stats)
         Detail.Appearance -> stringResource(R.string.main_title_appearance)
@@ -317,6 +327,7 @@ fun OngakuApp(
                             is Detail.Smart -> smartTracks
                             is Detail.Folder -> folderTracks
                             is Detail.PlaylistDetail -> playlistTracks
+                            is Detail.RuleListDetail -> ruleTracks
                             else -> emptyList()
                         }
                         if (detailTracks.isNotEmpty()) {
@@ -332,6 +343,13 @@ fun OngakuApp(
                             }
                             IconButton(onClick = { deletingId = currentPlaylist.id }) {
                                 Icon(Icons.Rounded.Delete, stringResource(R.string.main_delete_playlist))
+                            }
+                        } else if (currentRule != null) {
+                            IconButton(onClick = { editingRuleId = currentRule.id }) {
+                                Icon(Icons.Rounded.Edit, stringResource(R.string.rule_edit))
+                            }
+                            IconButton(onClick = { deletingRuleId = currentRule.id }) {
+                                Icon(Icons.Rounded.Delete, stringResource(R.string.rule_delete))
                             }
                         } else if (currentDetail == null) {
                             IconButton(onClick = { detail = Detail.Search }) {
@@ -424,6 +442,18 @@ fun OngakuApp(
                         onPlay = playerViewModel::play,
                         onPlayAll = playerViewModel::playAll,
                     )
+                    currentDetail is Detail.RuleListDetail -> Column(Modifier.fillMaxSize()) {
+                        if (ruleTracks.isNotEmpty()) {
+                            PlayAllButtons { shuffled -> playerViewModel.playAll(ruleTracks, shuffled) }
+                        }
+                        TrackList(
+                            tracks = ruleTracks,
+                            currentId = currentId,
+                            actions = actions,
+                            onPlay = playerViewModel::play,
+                            emptyMessage = stringResource(R.string.rule_empty),
+                        )
+                    }
                     currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
                         missing = currentPlaylist?.trackIds.orEmpty().count { it !in existingIds },
                         onRemove = {
@@ -512,6 +542,9 @@ fun OngakuApp(
                         onOpenSmart = { detail = Detail.Smart(it) },
                         onOpenPlaylist = { detail = Detail.PlaylistDetail(it.id) },
                         onCreatePlaylist = { creatingPlaylist = true },
+                        ruleCounts = ruleCounts,
+                        onOpenRuleList = { detail = Detail.RuleListDetail(it.id) },
+                        onCreateRuleList = { editingRuleId = "" },
                         existingIds = existingIds,
                         folders = folderRoot,
                         onOpenFolder = { detail = Detail.Folder(it) },
@@ -638,6 +671,42 @@ fun OngakuApp(
             },
             confirmButton = {
                 TextButton(onClick = LibraryIdentity::reportShown) { Text(stringResource(R.string.common_ok)) }
+            },
+        )
+    }
+
+    editingRuleId?.let { id ->
+        val genreNames = remember(genres) { genres.filter { it.key != "genre:" }.map { it.title } }
+        val folderPaths = remember(library.tracks) { FolderTree.allPaths(library.tracks) }
+        RuleListDialog(
+            initial = data.ruleLists.firstOrNull { it.id == id } ?: RuleList(id = "", name = ""),
+            library = library.tracks,
+            genres = genreNames,
+            folders = folderPaths,
+            onConfirm = {
+                appData.saveRuleList(it)
+                editingRuleId = null
+            },
+            onDismiss = { editingRuleId = null },
+        )
+    }
+
+    data.ruleLists.firstOrNull { it.id == deletingRuleId }?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { deletingRuleId = null },
+            title = { Text(stringResource(R.string.playlist_delete_title, rule.name)) },
+            text = { Text(stringResource(R.string.rule_delete_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        appData.deleteRuleList(rule.id)
+                        deletingRuleId = null
+                        detail = null
+                    },
+                ) { Text(stringResource(R.string.common_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingRuleId = null }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }

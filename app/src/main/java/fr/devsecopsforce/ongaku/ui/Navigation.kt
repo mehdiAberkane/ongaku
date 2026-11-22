@@ -18,6 +18,7 @@ internal sealed interface Detail {
     /** Liste automatique : ajouts récents, plus écoutés, redécouvertes… */
     data class Smart(val kind: SmartList) : Detail
     data class PlaylistDetail(val id: String) : Detail
+    data class RuleListDetail(val id: String) : Detail
     data object Settings : Detail
     data object Stats : Detail
     data object Appearance : Detail
@@ -32,6 +33,7 @@ internal object DetailCodec {
     fun encode(detail: Detail): List<String> = when (detail) {
         is Detail.Group -> listOf("group", detail.key) + detail.from?.let(::encode).orEmpty()
         is Detail.PlaylistDetail -> listOf("playlist", detail.id)
+        is Detail.RuleListDetail -> listOf("rule", detail.id)
         Detail.Search -> listOf("search")
         Detail.Favorites -> listOf("favorites")
         is Detail.Smart -> listOf("smart", detail.kind.name)
@@ -48,6 +50,7 @@ internal object DetailCodec {
         return when (name) {
             "group" -> saved.getOrNull(1)?.let { key -> Detail.Group(key, decode(saved.drop(2))) }
             "playlist" -> saved.getOrNull(1)?.let(Detail::PlaylistDetail)
+            "rule" -> saved.getOrNull(1)?.let(Detail::RuleListDetail)
             "search" -> Detail.Search
             "favorites" -> Detail.Favorites
             "smart" -> SmartList.entries.firstOrNull { it.name == saved.getOrNull(1) }?.let(Detail::Smart)

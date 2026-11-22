@@ -21,6 +21,7 @@ class NavigationTest {
             Detail.Search, Detail.Favorites, Detail.Smart(SmartList.RECENTLY_ADDED), Detail.Smart(SmartList.REDISCOVER),
             Detail.Settings, Detail.Stats, Detail.Appearance, Detail.Equalizer,
             Detail.PlaylistDetail("4f2c-liste"),
+            Detail.RuleListDetail("7a1b-regle"),
             Detail.Folder("Music/Anime/OST"),
             Detail.Folder(""),
             Detail.Group("album:hybrid theory|linkin park"),

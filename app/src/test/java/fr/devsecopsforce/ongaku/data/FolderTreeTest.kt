@@ -70,4 +70,11 @@ class FolderTreeTest {
         assertNull(FolderTree.parent(""))
         assertEquals("Anime", FolderTree.name("Music/Anime"))
     }
-}
+
+    @Test
+    fun `tous les dossiers, parents compris, par nom`() {
+        assertEquals(
+            listOf("Download", "Music", "Music/Anime", "Music/Anime/OST", "Music/rock"),
+            FolderTree.allPaths(library),
+        )
+    }}

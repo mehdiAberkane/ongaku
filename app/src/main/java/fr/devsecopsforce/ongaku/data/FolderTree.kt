@@ -20,6 +20,16 @@ object FolderTree {
     /** Dossier parent ; null pour la racine. */
     fun parent(path: String): String? = if (path.isEmpty()) null else path.substringBeforeLast('/', "")
 
+    /** Tous les dossiers qui contiennent de la musique, directement ou dans un sous-dossier, par nom. */
+    fun allPaths(tracks: List<Track>): List<String> {
+        val paths = HashSet<String>()
+        tracks.forEach { track ->
+            var path: String? = normalize(track.folder)
+            while (!path.isNullOrEmpty() && paths.add(path)) path = parent(path)
+        }
+        return paths.sortedBy { it.searchKey() }
+    }
+
     fun isUnder(folder: String, path: String): Boolean =
         path.isEmpty() || folder == path || folder.startsWith("$path/")
 

@@ -385,4 +385,30 @@
     <string name="smart_empty_rediscover">Aucun favori oublié pour l\'instant.</string>
     <string name="settings_smart_size">Taille des listes automatiques</string>
     <string name="settings_smart_size_note">Ajouts récents, Top, écoutés récemment, jamais écoutés, moins écoutés et redécouvertes.</string>
+    <string name="common_save">Enregistrer</string>
+    <!-- Listes par règle -->
+    <string name="rule_section">Listes par règle</string>
+    <string name="rule_new">Nouvelle liste par règle</string>
+    <string name="rule_new_subtitle">Genre, années, durée, dossier : la liste se met à jour seule</string>
+    <string name="rule_edit">Modifier la règle</string>
+    <string name="rule_delete">Supprimer la liste</string>
+    <string name="rule_delete_text">Seule la liste est supprimée : tes morceaux restent sur le téléphone.</string>
+    <string name="rule_name">Nom</string>
+    <string name="rule_genre">Genre</string>
+    <string name="rule_folder">Dossier (sous-dossiers compris)</string>
+    <string name="rule_year_from">Année depuis</string>
+    <string name="rule_year_to">Année jusqu\'à</string>
+    <string name="rule_any">Tous</string>
+    <string name="rule_need_condition">Choisis au moins une condition.</string>
+    <string name="rule_invalid_range">Une valeur de début dépasse la valeur de fin.</string>
+    <string name="rule_empty">Aucun morceau ne remplit ces conditions pour l\'instant.</string>
+    <string name="rule_summary_from">depuis %1$d</string>
+    <string name="rule_summary_until">jusqu\'à %1$d</string>
+    <string name="rule_summary_longer">plus de %1$s</string>
+    <string name="rule_summary_shorter">moins de %1$s</string>
+    <plurals name="rule_matching">
+        <item quantity="one">%1$d titre correspond</item>
+        <item quantity="many">%1$d titres correspondent</item>
+        <item quantity="other">%1$d titres correspondent</item>
+    </plurals>
 </resources>
