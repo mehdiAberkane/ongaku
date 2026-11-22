@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -165,7 +166,8 @@ internal fun FullPlayer(
     trackId: Long?,
     actions: TrackActions?,
     background: File?,
-    onClose: () -> Unit,
+    /** null : lecteur affiché en colonne à côté de la bibliothèque, rien à fermer. */
+    onClose: (() -> Unit)?,
     onAddQueueToPlaylist: ((trackIds: List<Long>) -> Unit)? = null,
     /** Par-dessus le verrouillage : le bouton du haut ouvre le déverrouillage d'Android. */
     onLockScreen: Boolean = false,
@@ -197,13 +199,13 @@ internal fun FullPlayer(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (onLockScreen) {
+                    if (onLockScreen && onClose != null) {
                         TextButton(onClick = onClose) {
                             Icon(Icons.Rounded.LockOpen, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.player_unlock))
                         }
-                    } else {
+                    } else if (onClose != null) {
                         IconButton(onClick = onClose) {
                             Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_close))
                         }
@@ -476,19 +478,21 @@ internal fun PlayerCover(uri: Uri?) {
         CoverShape.CIRCLE -> CircleShape
         CoverShape.SQUARE -> RectangleShape
     }
-    AsyncImage(
-        model = uri,
-        contentDescription = stringResource(R.string.player_cover),
-        contentScale = ContentScale.Crop,
-        onSuccess = { loaded = true },
-        onError = { loaded = false },
-        modifier = Modifier
-            .fillMaxWidth(0.85f)
-            .widthIn(max = 360.dp)
-            .aspectRatio(1f)
-            .graphicsLayer { alpha = if (loaded) 1f else 0f }
-            .clip(shape),
-    )
+    // Carrée, aussi grande que possible dans l'espace libre : en paysage, c'est la hauteur qui limite.
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val side = minOf(maxWidth * 0.85f, maxHeight, 360.dp)
+        AsyncImage(
+            model = uri,
+            contentDescription = stringResource(R.string.player_cover),
+            contentScale = ContentScale.Crop,
+            onSuccess = { loaded = true },
+            onError = { loaded = false },
+            modifier = Modifier
+                .size(side)
+                .graphicsLayer { alpha = if (loaded) 1f else 0f }
+                .clip(shape),
+        )
+    }
 }
 
 @Composable
