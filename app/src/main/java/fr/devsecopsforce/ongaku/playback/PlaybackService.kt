@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
@@ -16,7 +18,8 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import fr.devsecopsforce.ongaku.LockScreenActivity
 import fr.devsecopsforce.ongaku.data.ListeningHistory
 import fr.devsecopsforce.ongaku.data.PlayCounts
@@ -26,9 +29,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
 
-    private var session: MediaSession? = null
+    private var session: MediaLibrarySession? = null
     private var crossfade: CrossfadeController? = null
     private var sleepTimer: SleepTimer? = null
     private var effects: AudioEffects? = null
@@ -82,8 +85,7 @@ class PlaybackService : MediaSessionService() {
         if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) effects = AudioEffects(this, audioSessionId)
 
         val launchIntent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
-        val builder = MediaSession.Builder(this, player)
-            .setCallback(ResumptionCallback(this, scope, autoplay) { sleepTimer })
+        val builder = MediaLibrarySession.Builder(this, player, ResumptionCallback(this, scope, autoplay) { sleepTimer })
         if (launchIntent != null) {
             builder.setSessionActivity(
                 PendingIntent.getActivity(
@@ -131,8 +133,19 @@ class PlaybackService : MediaSessionService() {
             .also { if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) it.audioSessionId = audioSessionId }
 
     /** Voir [SessionAccess] : les autres applications reçoivent null et ne peuvent pas se connecter. */
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-        session.takeIf { SessionAccess.allowed(controllerInfo.packageName, packageName, controllerInfo.isTrusted) }
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
+        val pkg = controllerInfo.packageName
+        val systemApp = pkg in SessionAccess.CAR_PACKAGES && isSystemApp(pkg)
+        return session.takeIf { SessionAccess.allowed(pkg, packageName, controllerInfo.isTrusted, systemApp) }
+    }
+
+    /** Installée avec le système (éventuellement mise à jour depuis) : voir [SessionAccess.CAR_PACKAGES]. */
+    private fun isSystemApp(pkg: String): Boolean = try {
+        val flags = packageManager.getApplicationInfo(pkg, 0).flags
+        flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
+    }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = session?.player

@@ -165,6 +165,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** La liste de la file a changé depuis la dernière copie (ajout, retrait, déplacement…). */
     private var queueChanged = true
 
+    /** Demande vocale arrivée avant la connexion au lecteur. */
+    private var pendingSearch: String? = null
+
     private val listener = object : Player.Listener {
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             // Une durée découverte en cours de lecture change aussi la chronologie, pas la file.
@@ -184,7 +187,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 controller = connected
                 connected.addListener(listener)
                 syncState(connected)
-                restoreSavedQueue(connected)
+                val search = pendingSearch
+                if (search != null) {
+                    pendingSearch = null
+                    playFromSearch(search)
+                } else {
+                    restoreSavedQueue(connected)
+                }
             },
             ContextCompat.getMainExecutor(application),
         )
@@ -327,6 +336,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 play()
             }
         }
+    }
+
+    /**
+     * « Joue … sur Ongaku » : la session cherche dans la bibliothèque (voir CarLibrary) ; une
+     * demande vide reprend la dernière file.
+     */
+    fun playFromSearch(query: String) {
+        val player = controller ?: run {
+            pendingSearch = query
+            return
+        }
+        restoreJob?.cancel()
+        player.setMediaItem(
+            MediaItem.Builder()
+                .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery(query).build())
+                .build(),
+        )
+        player.prepare()
+        player.play()
     }
 
     fun next() {

@@ -6,12 +6,17 @@ package fr.devsecopsforce.ongaku.playback
 import android.content.Context
 import android.os.Bundle
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
@@ -62,15 +67,70 @@ object ResumeQueue {
 }
 
 /**
- * Réponses de la session : reprise déclenchée par le système (casque Bluetooth…), et commandes de
- * file propres à Ongaku ([QueueCommands]).
+ * Réponses de la session : reprise déclenchée par le système (casque Bluetooth…), commandes de
+ * file propres à Ongaku ([QueueCommands]), et bibliothèque parcourue depuis la voiture ([CarLibrary]).
  */
 class ResumptionCallback(
     private val context: Context,
     private val scope: CoroutineScope,
     private val autoplay: AutoplayGuard,
     private val sleepTimer: () -> SleepTimer?,
-) : MediaSession.Callback {
+) : MediaLibrarySession.Callback {
+    private val car = CarLibrary(context, scope)
+
+    override fun onGetLibraryRoot(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(car.root(params))
+
+    override fun onGetChildren(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        parentId: String,
+        page: Int,
+        pageSize: Int,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = car.children(parentId, page, pageSize, params)
+
+    override fun onGetItem(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        mediaId: String,
+    ): ListenableFuture<LibraryResult<MediaItem>> = car.item(mediaId)
+
+    override fun onSearch(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<Void>> = car.search(session, browser, query, params)
+
+    override fun onGetSearchResult(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        page: Int,
+        pageSize: Int,
+        params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = car.searchResult(query, page, pageSize, params)
+
+    /**
+     * Ongaku envoie des morceaux complets ; la voiture n'envoie qu'un identifiant ou une demande
+     * vocale, que [CarLibrary] transforme en file.
+     */
+    override fun onSetMediaItems(
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        mediaItems: MutableList<MediaItem>,
+        startIndex: Int,
+        startPositionMs: Long,
+    ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
+        if (mediaItems.isNotEmpty() && mediaItems.all { it.localConfiguration != null }) {
+            super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+        } else {
+            car.resolve(mediaItems)
+        }
 
     override fun onConnect(
         session: MediaSession,
@@ -80,7 +140,7 @@ class ResumptionCallback(
         // reçoivent la réponse par défaut de Media3.
         if (controller.packageName != context.packageName) return super.onConnect(session, controller)
         return MediaSession.ConnectionResult.accept(
-            MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+            MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                 .add(QueueCommands.ADD)
                 .add(QueueCommands.MOVE)
                 .add(AutoplayGuard.START)

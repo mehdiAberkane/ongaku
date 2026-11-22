@@ -19,6 +19,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
 - **Listes automatiques** : ajouts récents, Top, écoutés récemment, jamais écoutés, moins écoutés,
   redécouvertes (taille réglable) ; listes par règle (genre, années, durée, dossier) qui se mettent
   à jour seules.
+- **Android Auto** : favoris, listes, albums, artistes et ajouts récents depuis la voiture,
+  recherche vocale ; « Joue … sur Ongaku » marche aussi avec l'Assistant.
 - **Statistiques** : historique daté des écoutes, temps écouté par jour, semaine, mois et année,
   classements des morceaux, artistes et albums, bilan annuel. Tout reste sur le téléphone et
   entre dans la sauvegarde.
@@ -36,9 +38,9 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
 - **Apparence** : couleurs du système ou couleur personnalisée, noir pur pour écran OLED, images de
   fond (générale ou par morceau) avec flou et assombrissement, taille du texte, affichage compact.
 - **Filtres** : extensions de fichier affichées, dossiers surveillés, durée minimale et maximale.
-- **Sauvegarde** : export et import des playlists et favoris dans un fichier JSON. Les morceaux sont
-  retrouvés par leurs tags, donc la sauvegarde fonctionne d'un téléphone à l'autre.
-- **Statistiques** : nombre d'écoutes et durée totale.
+- **Sauvegarde** : export et import des playlists, favoris, listes par règle et de l'historique
+  d'écoute dans un fichier JSON. Les morceaux sont retrouvés par leurs tags, donc la sauvegarde
+  fonctionne d'un téléphone à l'autre.
 
 Les playlists, favoris et réglages restent dans le stockage privé de l'application : Ongaku n'écrit
 jamais dans les fichiers audio.
