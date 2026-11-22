@@ -105,6 +105,7 @@
     <string name="library_tab_albums">Albums</string>
     <string name="library_tab_artists">Artistes</string>
     <string name="library_tab_playlists">Listes</string>
+    <string name="library_tab_folders">Dossiers</string>
     <string name="library_play">Lire</string>
     <string name="library_shuffle">Lecture aléatoire</string>
     <string name="library_sort_by">Trier par : %1$s</string>
@@ -355,4 +356,11 @@
     <string name="eq_system_open">Ouvrir l\'égaliseur du téléphone</string>
     <string name="eq_system_missing">Ce téléphone ne propose pas d\'égaliseur à ouvrir.</string>
     <string name="settings_equalizer_note">Bandes, préréglages et amplification des basses.</string>
+    <!-- Dossiers -->
+    <string name="folder_empty">Ce dossier ne contient plus de musique.</string>
+    <plurals name="folder_play_only_here">
+        <item quantity="one">Lire seulement le %1$d titre de ce dossier</item>
+        <item quantity="many">Lire seulement les %1$d titres de ce dossier</item>
+        <item quantity="other">Lire seulement les %1$d titres de ce dossier</item>
+    </plurals>
 </resources>

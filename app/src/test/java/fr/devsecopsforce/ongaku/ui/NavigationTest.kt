@@ -20,6 +20,8 @@ class NavigationTest {
             Detail.Search, Detail.Favorites, Detail.RecentlyAdded, Detail.Top50,
             Detail.Settings, Detail.Stats, Detail.Appearance, Detail.Equalizer,
             Detail.PlaylistDetail("4f2c-liste"),
+            Detail.Folder("Music/Anime/OST"),
+            Detail.Folder(""),
             Detail.Group("album:hybrid theory|linkin park"),
         )
         screens.forEach { assertEquals(it, roundTrip(it)) }
