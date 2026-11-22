@@ -56,6 +56,18 @@ Déplacer une carte : modifier `columnId`, `order` et `updatedAt` dans son fichi
 - **Dépendances vérifiées** : Gradle contrôle l'empreinte de chaque bibliothèque téléchargée (`gradle/verification-metadata.xml`) et les versions livrées dans l'application sont verrouillées (`app/gradle.lockfile`). Après un ajout ou une mise à jour de dépendance : `./gradlew :app:dependencies --write-locks`, puis `./gradlew --write-verification-metadata sha256 lintDebug testDebugUnitTest assembleDebug assembleRelease` **avec un cache Gradle vide** (`GRADLE_USER_HOME` pointant vers un dossier neuf, supprimé ensuite) : avec le cache habituel, des fichiers de métadonnées déjà résolus ne sont pas retéléchargés, manquent dans le fichier, et la CI échoue. Sous Windows, l'empreinte de `aapt2` pour Linux (utilisée par la CI) n'est pas générée : la reprendre sur le dépôt Maven de Google et l'ajouter à la main.
 - La CI cherche aussi les secrets dans tout l'historique (gitleaks) et les vulnérabilités connues des bibliothèques de `app/gradle.lockfile` (OSV-Scanner). Ces outils sont téléchargés depuis leurs publications officielles et vérifiés par empreinte.
 
+## Tester sur l'émulateur (d'abord)
+
+Un appareil Android virtuel sert aux essais courants : il n'a aucune donnée de l'utilisateur, on peut tout y faire (accorder ou retirer des autorisations, remplir et vider les listes, lancer la lecture) sans sauvegarde ni restauration.
+
+- Émulateur du SDK Android, image Android 16 « Google APIs » x86_64, accélérée par l'hyperviseur de Windows (WHPX). Docker ne convient pas : sous Windows, il n'offre pas l'accélération dont les images Android ont besoin.
+- Créer l'appareil une fois : `sdkmanager emulator "system-images;android-36;google_apis;x86_64"` puis `avdmanager create avd -n ongaku_test -k "system-images;android-36;google_apis;x86_64" -d pixel_7`.
+- Démarrer : `emulator -avd ongaku_test -no-snapshot-save -no-boot-anim`, attendre `getprop sys.boot_completed` = 1 (environ 3 minutes la première fois).
+- Musique de test : `python tools/test-music.py <dossier>` (Python seul, aucune musique protégée : des notes douces avec de vrais tags), puis `adb -s emulator-5554 push <dossier>/. /sdcard/Music/` et `adb -s emulator-5554 shell content call --method scan_volume --uri content://media --arg external_primary`.
+- Installer la version de débogage et accorder l'accès : `adb -s emulator-5554 shell pm grant fr.devsecopsforce.ongaku android.permission.READ_MEDIA_AUDIO`.
+- Quand le téléphone est aussi branché, **toujours** préciser l'appareil (`adb -s`) : une commande sans `-s` échoue, et une commande vers le mauvais appareil toucherait aux vraies données.
+- Garder le vrai téléphone pour ce que l'émulateur ne reproduit pas : Bluetooth et voiture, OnePlus (verrouillage, autorisations), performances sur une vraie bibliothèque.
+
 ## Tester sur le téléphone
 
 - Tester sur le vrai téléphone de l'utilisateur, branché en USB (`adb`), et vérifier le résultat (état de la session média, capture d'écran) plutôt que de le supposer.
