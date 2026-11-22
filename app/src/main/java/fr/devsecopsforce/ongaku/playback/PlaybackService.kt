@@ -1,3 +1,6 @@
+// Media3 marque certaines API comme instables (susceptibles de changer d'une version à l'autre).
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package fr.devsecopsforce.ongaku.playback
 
 import android.app.PendingIntent
@@ -6,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.media.AudioManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
@@ -26,6 +30,13 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private var crossfade: CrossfadeController? = null
     private var sleepTimer: SleepTimer? = null
+    private var effects: AudioEffects? = null
+
+    /**
+     * Session audio partagée par le lecteur actif et le lecteur de relève : l'égaliseur, attaché à
+     * cette session, s'applique aux deux et survit à leur échange.
+     */
+    private var audioSessionId = C.AUDIO_SESSION_ID_UNSET
     private val autoplay by lazy { AutoplayGuard(this, scope) { session?.player } }
     private var stateKeeper: PlaybackStateKeeper? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -63,7 +74,11 @@ class PlaybackService : MediaSessionService() {
             IntentFilter(Intent.ACTION_SCREEN_OFF),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        // Jamais la session 0 : elle désigne la sortie de tout le téléphone, pas Ongaku seul.
+        audioSessionId = getSystemService(AudioManager::class.java).generateAudioSessionId()
+            .takeIf { it > 0 } ?: C.AUDIO_SESSION_ID_UNSET
         val player = buildPlayer(isActive = true)
+        if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) effects = AudioEffects(this, audioSessionId)
 
         val launchIntent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
         val builder = MediaSession.Builder(this, player)
@@ -111,9 +126,9 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(isActive && settings.pauseOnNoisy)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+            .also { if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) it.audioSessionId = audioSessionId }
 
     /** Voir [SessionAccess] : les autres applications reçoivent null et ne peuvent pas se connecter. */
-    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         session.takeIf { SessionAccess.allowed(controllerInfo.packageName, packageName, controllerInfo.isTrusted) }
 
@@ -132,6 +147,8 @@ class PlaybackService : MediaSessionService() {
         autoplay.stop()
         sleepTimer?.release()
         sleepTimer = null
+        effects?.release()
+        effects = null
         scope.cancel()
         crossfade?.release()
         crossfade = null

@@ -338,4 +338,21 @@
     </plurals>
     <string name="settings_sleep_fade">Minuteur de sommeil : baisser le volume sur la dernière minute</string>
     <string name="settings_sleep_fade_note">Le minuteur se règle depuis l\'écran de lecture, avec l\'icône de lune.</string>
+    <!-- Égaliseur -->
+    <string name="eq_title">Égaliseur</string>
+    <string name="eq_enabled">Égaliseur et basses</string>
+    <string name="eq_note">Coupé, le son reste celui d\'origine. Tes fichiers ne sont jamais modifiés.</string>
+    <string name="eq_not_ready">L\'égaliseur n\'est pas encore prêt : reviens sur cet écran dans un instant.</string>
+    <string name="eq_unsupported">Ce téléphone ne propose pas d\'égaliseur à Ongaku.</string>
+    <string name="eq_presets">Préréglages</string>
+    <string name="eq_custom">Personnalisé</string>
+    <string name="eq_bands">Bandes</string>
+    <string name="eq_flat">Tout remettre à 0 dB</string>
+    <string name="eq_bass">Amplification des basses</string>
+    <string name="eq_bass_off">Aucune</string>
+    <string name="eq_system">Égaliseur du téléphone</string>
+    <string name="eq_system_note">Le téléphone propose aussi le sien. Il s\'ajoute à celui d\'Ongaku.</string>
+    <string name="eq_system_open">Ouvrir l\'égaliseur du téléphone</string>
+    <string name="eq_system_missing">Ce téléphone ne propose pas d\'égaliseur à ouvrir.</string>
+    <string name="settings_equalizer_note">Bandes, préréglages et amplification des basses.</string>
 </resources>

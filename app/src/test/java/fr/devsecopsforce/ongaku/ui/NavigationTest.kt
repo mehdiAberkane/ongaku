@@ -18,7 +18,7 @@ class NavigationTest {
     fun `chaque écran se retrouve après une rotation`() {
         val screens = listOf(
             Detail.Search, Detail.Favorites, Detail.RecentlyAdded, Detail.Top50,
-            Detail.Settings, Detail.Stats, Detail.Appearance,
+            Detail.Settings, Detail.Stats, Detail.Appearance, Detail.Equalizer,
             Detail.PlaylistDetail("4f2c-liste"),
             Detail.Group("album:hybrid theory|linkin park"),
         )

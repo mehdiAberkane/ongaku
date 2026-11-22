@@ -19,6 +19,7 @@ internal sealed interface Detail {
     data object Settings : Detail
     data object Stats : Detail
     data object Appearance : Detail
+    data object Equalizer : Detail
 }
 
 internal object DetailCodec {
@@ -33,6 +34,7 @@ internal object DetailCodec {
         Detail.Settings -> listOf("settings")
         Detail.Stats -> listOf("stats")
         Detail.Appearance -> listOf("appearance")
+        Detail.Equalizer -> listOf("equalizer")
     }
 
     /** null pour une forme inconnue : on revient alors aux onglets. */
@@ -48,6 +50,7 @@ internal object DetailCodec {
             "settings" -> Detail.Settings
             "stats" -> Detail.Stats
             "appearance" -> Detail.Appearance
+            "equalizer" -> Detail.Equalizer
             else -> null
         }
     }
