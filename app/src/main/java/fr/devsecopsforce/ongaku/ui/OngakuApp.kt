@@ -199,7 +199,14 @@ fun OngakuApp(
     var mergeFeaturing by remember { mutableStateOf(settings.mergeFeaturing) }
     val artists = remember(library.tracks, mergeFeaturing) { library.tracks.artists(mergeFeaturing) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    val goBack: () -> Unit = { detail = (detail as? Detail.Group)?.from }
+    val goBack: () -> Unit = {
+        detail = when (val open = detail) {
+            is Detail.Group -> open.from
+            // Ouvert depuis les réglages : on y revient.
+            Detail.Equalizer -> Detail.Settings
+            else -> null
+        }
+    }
 
     // Mémorisé : un objet neuf à chaque recomposition empêcherait Compose de sauter les lignes visibles.
     val actions = remember(data, allTracksById) {
@@ -244,6 +251,7 @@ fun OngakuApp(
         Detail.Settings -> stringResource(R.string.main_title_settings)
         Detail.Stats -> stringResource(R.string.main_title_stats)
         Detail.Appearance -> stringResource(R.string.main_title_appearance)
+        Detail.Equalizer -> stringResource(R.string.eq_title)
         null -> stringResource(R.string.app_name)
     }
 
@@ -327,7 +335,8 @@ fun OngakuApp(
                     }
                     // Les réglages restent accessibles, sinon un filtre trop strict serait sans retour.
                     library.tracks.isEmpty() && currentDetail != Detail.Settings &&
-                        currentDetail != Detail.Appearance && currentDetail != Detail.Stats -> CenteredMessage(
+                        currentDetail != Detail.Appearance && currentDetail != Detail.Stats &&
+                        currentDetail != Detail.Equalizer -> CenteredMessage(
                         stringResource(
                             if (library.allTracks.isEmpty()) R.string.main_no_music else R.string.main_all_filtered,
                         ),
@@ -426,8 +435,10 @@ fun OngakuApp(
                         // Tous les morceaux : un filtre ne doit pas vider la sauvegarde des listes.
                         onExport = { appData.exportBackup(it, library.allTracks) },
                         onImport = { appData.importBackup(it, library.allTracks) },
+                        onOpenEqualizer = { detail = Detail.Equalizer },
                     )
                     currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
+                    currentDetail == Detail.Equalizer -> EqualizerScreen()
                     currentDetail == Detail.Appearance -> AppearanceScreen(
                         data = data,
                         backgroundFile = appData::backgroundFile,

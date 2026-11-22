@@ -57,6 +57,7 @@ fun SettingsScreen(
     onMergeFeaturingChange: (Boolean) -> Unit,
     onExport: (Uri) -> Unit,
     onImport: (Uri) -> Unit,
+    onOpenEqualizer: () -> Unit,
 ) {
     var crossfade by remember { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     var pauseOnNoisy by remember { mutableStateOf(settings.pauseOnNoisy) }
@@ -135,6 +136,10 @@ fun SettingsScreen(
             )
         }
         Hint(stringResource(R.string.settings_sleep_fade_note))
+
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = onOpenEqualizer) { Text(stringResource(R.string.eq_title)) }
+        Hint(stringResource(R.string.settings_equalizer_note))
 
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
