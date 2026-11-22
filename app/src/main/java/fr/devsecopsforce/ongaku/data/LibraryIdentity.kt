@@ -50,11 +50,12 @@ object LibraryIdentity {
         val store = AppDataStore(context)
         val data = store.load()
         val counts = PlayCounts(context)
+        val history = ListeningHistory.get(context)
         val resume = PlaybackStateKeeper.prefs(context)
         val queue = resume.getString(PlaybackStateKeeper.KEY_QUEUE, null).orEmpty()
             .split(',').mapNotNull { it.toLongOrNull() }
         val current = resume.getString(PlaybackStateKeeper.KEY_CURRENT, null)?.toLongOrNull()
-        val referenced = data.referencedIds() + counts.referencedIds() + queue + listOfNotNull(current)
+        val referenced = data.referencedIds() + counts.referencedIds() + history.referencedIds() + queue + listOfNotNull(current)
 
         val result = TrackIdentity.reconcile(previous, library, referenced)
 
@@ -69,6 +70,7 @@ object LibraryIdentity {
                 return
             }
             counts.remap(result.remap)
+            history.remap(result.remap)
             resume.edit {
                 if (queue.isNotEmpty()) {
                     putString(PlaybackStateKeeper.KEY_QUEUE, queue.map { result.remap[it] ?: it }.joinToString(","))

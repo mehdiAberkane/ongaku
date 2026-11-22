@@ -19,6 +19,9 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
 - **Listes automatiques** : ajouts récents, Top, écoutés récemment, jamais écoutés, moins écoutés,
   redécouvertes (taille réglable) ; listes par règle (genre, années, durée, dossier) qui se mettent
   à jour seules.
+- **Statistiques** : historique daté des écoutes, temps écouté par jour, semaine, mois et année,
+  classements des morceaux, artistes et albums, bilan annuel. Tout reste sur le téléphone et
+  entre dans la sauvegarde.
 - **Genres et années** : onglets par genre (tag genre, Android 11 et plus) et par décennie ; albums
   en liste ou en grille de pochettes.
 - **Dossiers** : un onglet qui suit l'arborescence du téléphone ; lecture d'un dossier avec ses

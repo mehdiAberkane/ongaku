@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import fr.devsecopsforce.ongaku.LockScreenActivity
+import fr.devsecopsforce.ongaku.data.ListeningHistory
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import kotlinx.coroutines.CoroutineScope
@@ -99,6 +100,7 @@ class PlaybackService : MediaSessionService() {
             player,
             settings,
             PlayCounts(this),
+            ListeningHistory.get(this),
             createPlayer = { buildPlayer(isActive = false) },
             onPlayerSwapped = { next ->
                 session?.player = next

@@ -251,6 +251,7 @@ fun StatsScreen(tracks: List<Track>, settings: PlaybackSettings, mergeFeaturing:
         Spacer(Modifier.height(24.dp))
         SectionTitle(stringResource(R.string.stats_listening))
         StatRow(stringResource(R.string.stats_listened_time), formatLongDuration(listenedMs))
+        ListeningSections()
     }
 }
 
@@ -274,7 +275,7 @@ internal fun Hint(text: String) {
 }
 
 @Composable
-private fun StatRow(label: String, value: String) {
+internal fun StatRow(label: String, value: String) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -287,7 +288,7 @@ private fun StatRow(label: String, value: String) {
 }
 
 @Composable
-private fun formatLongDuration(ms: Long): String {
+internal fun formatLongDuration(ms: Long): String {
     val totalMinutes = ms / 60_000
     val days = totalMinutes / (24 * 60)
     val hours = totalMinutes / 60 % 24

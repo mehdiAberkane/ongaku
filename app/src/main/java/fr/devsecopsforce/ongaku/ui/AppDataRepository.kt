@@ -11,6 +11,7 @@ import fr.devsecopsforce.ongaku.data.AppDataStore
 import fr.devsecopsforce.ongaku.data.BackgroundImage
 import fr.devsecopsforce.ongaku.data.ImportLimits
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
+import fr.devsecopsforce.ongaku.data.ListeningHistory
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistBackup
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
@@ -210,7 +211,8 @@ class AppDataRepository private constructor(private val app: Application) {
         scope.launch {
             loading.join()
             try {
-                val text = PlaylistBackup.serialize(_state.value, tracks)
+                val history = ListeningHistory.get(app)
+                val text = PlaylistBackup.serialize(_state.value, tracks, history.plays.value, history.days.value)
                 val output = app.contentResolver.openOutputStream(target)
                     ?: throw IOException("destination inaccessible")
                 output.use { it.write(text.toByteArray(Charsets.UTF_8)) }
@@ -248,6 +250,7 @@ class AppDataRepository private constructor(private val app: Application) {
             applyChange { data ->
                 PlaylistBackup.merge(data, imported) { UUID.randomUUID().toString() }
             }
+            ListeningHistory.get(app).merge(imported.history, imported.listeningDays)
             val missing = if (imported.missingTracks > 0) {
                 app.getString(R.string.backup_import_missing, imported.missingTracks)
             } else {
