@@ -46,7 +46,6 @@
     <string name="main_title_search">Rechercher</string>
     <string name="main_title_favorites">Favoris</string>
     <string name="main_title_recent">Ajouts récents</string>
-    <string name="main_title_top50">Top 50</string>
     <string name="main_title_settings">Réglages</string>
     <string name="main_title_stats">Informations</string>
     <string name="main_title_appearance">Apparence</string>
@@ -371,4 +370,19 @@
     <string name="library_decade">Années %1$d</string>
     <string name="library_albums_as_grid">Afficher les albums en grille</string>
     <string name="library_albums_as_list">Afficher les albums en liste</string>
+    <!-- Listes automatiques -->
+    <string name="smart_title_most_played">Top %1$d</string>
+    <string name="smart_title_recently_played">Écoutés récemment</string>
+    <string name="smart_title_never_played">Jamais écoutés</string>
+    <string name="smart_title_least_played">Les moins écoutés</string>
+    <string name="smart_title_rediscover">Redécouvertes</string>
+    <string name="smart_subtitle_recently_played">Tes %1$d dernières écoutes</string>
+    <string name="smart_subtitle_never_played">Morceaux encore jamais écoutés</string>
+    <string name="smart_subtitle_least_played">Écoutés, mais rarement</string>
+    <string name="smart_subtitle_rediscover">Favoris pas écoutés depuis un mois</string>
+    <string name="smart_empty_recently_played">Les morceaux écoutés au moins 30 secondes apparaîtront ici, à partir de maintenant.</string>
+    <string name="smart_empty_never_played">Tu as écouté tous tes morceaux.</string>
+    <string name="smart_empty_rediscover">Aucun favori oublié pour l\'instant.</string>
+    <string name="settings_smart_size">Taille des listes automatiques</string>
+    <string name="settings_smart_size_note">Ajouts récents, Top, écoutés récemment, jamais écoutés, moins écoutés et redécouvertes.</string>
 </resources>

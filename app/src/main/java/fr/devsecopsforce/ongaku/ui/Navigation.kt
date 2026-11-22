@@ -4,6 +4,7 @@ package fr.devsecopsforce.ongaku.ui
 
 import androidx.compose.runtime.saveable.Saver
 import fr.devsecopsforce.ongaku.data.FolderTree
+import fr.devsecopsforce.ongaku.data.SmartList
 import fr.devsecopsforce.ongaku.data.TrackGroup
 
 internal sealed interface Detail {
@@ -14,8 +15,8 @@ internal sealed interface Detail {
     data class Group(val key: String, val from: Detail? = null) : Detail
     data object Search : Detail
     data object Favorites : Detail
-    data object RecentlyAdded : Detail
-    data object Top50 : Detail
+    /** Liste automatique : ajouts récents, plus écoutés, redécouvertes… */
+    data class Smart(val kind: SmartList) : Detail
     data class PlaylistDetail(val id: String) : Detail
     data object Settings : Detail
     data object Stats : Detail
@@ -33,8 +34,7 @@ internal object DetailCodec {
         is Detail.PlaylistDetail -> listOf("playlist", detail.id)
         Detail.Search -> listOf("search")
         Detail.Favorites -> listOf("favorites")
-        Detail.RecentlyAdded -> listOf("recent")
-        Detail.Top50 -> listOf("top50")
+        is Detail.Smart -> listOf("smart", detail.kind.name)
         Detail.Settings -> listOf("settings")
         Detail.Stats -> listOf("stats")
         Detail.Appearance -> listOf("appearance")
@@ -50,8 +50,10 @@ internal object DetailCodec {
             "playlist" -> saved.getOrNull(1)?.let(Detail::PlaylistDetail)
             "search" -> Detail.Search
             "favorites" -> Detail.Favorites
-            "recent" -> Detail.RecentlyAdded
-            "top50" -> Detail.Top50
+            "smart" -> SmartList.entries.firstOrNull { it.name == saved.getOrNull(1) }?.let(Detail::Smart)
+            // Noms d'avant les listes automatiques supplémentaires.
+            "recent" -> Detail.Smart(SmartList.RECENTLY_ADDED)
+            "top50" -> Detail.Smart(SmartList.MOST_PLAYED)
             "settings" -> Detail.Settings
             "stats" -> Detail.Stats
             "appearance" -> Detail.Appearance

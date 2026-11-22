@@ -90,6 +90,7 @@ import fr.devsecopsforce.ongaku.data.GroupRow
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
 import fr.devsecopsforce.ongaku.data.FolderTree
+import fr.devsecopsforce.ongaku.data.SmartList
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackGroup
 import fr.devsecopsforce.ongaku.data.TrackSort
@@ -118,8 +119,8 @@ internal fun LibraryTabs(
     onPlayAll: (Boolean) -> Unit,
     onOpenGroup: (TrackGroup) -> Unit,
     onOpenFavorites: () -> Unit,
-    onOpenRecent: () -> Unit,
-    onOpenTop: () -> Unit,
+    smartSize: Int,
+    onOpenSmart: (SmartList) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
     existingIds: Set<Long>,
@@ -198,8 +199,8 @@ internal fun LibraryTabs(
                 actions.data,
                 existingIds,
                 onOpenFavorites,
-                onOpenRecent,
-                onOpenTop,
+                smartSize,
+                onOpenSmart,
                 onOpenPlaylist,
                 onCreatePlaylist,
             )
@@ -381,8 +382,8 @@ internal fun PlaylistsTab(
     data: AppData,
     existingIds: Set<Long>,
     onOpenFavorites: () -> Unit,
-    onOpenRecent: () -> Unit,
-    onOpenTop: () -> Unit,
+    smartSize: Int,
+    onOpenSmart: (SmartList) -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
 ) {
@@ -397,22 +398,13 @@ internal fun PlaylistsTab(
                 onClick = onOpenFavorites,
             )
         }
-        item {
+        items(SmartList.entries, key = { "smart:${it.name}" }) { kind ->
             ListRow(
-                title = stringResource(R.string.main_title_recent),
-                subtitle = stringResource(R.string.playlists_recent_subtitle, SMART_PLAYLIST_SIZE),
+                title = smartTitle(kind, smartSize),
+                subtitle = smartSubtitle(kind, smartSize),
                 artworkUri = null,
-                icon = Icons.Rounded.Schedule,
-                onClick = onOpenRecent,
-            )
-        }
-        item {
-            ListRow(
-                title = stringResource(R.string.main_title_top50),
-                subtitle = stringResource(R.string.playlists_top50_subtitle, SMART_PLAYLIST_SIZE),
-                artworkUri = null,
-                icon = Icons.Rounded.Star,
-                onClick = onOpenTop,
+                icon = smartIcon(kind),
+                onClick = { onOpenSmart(kind) },
             )
         }
         item { SectionHeader(stringResource(R.string.playlists_section_mine)) }

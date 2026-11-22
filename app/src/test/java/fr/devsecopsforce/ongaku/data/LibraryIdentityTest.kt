@@ -32,9 +32,9 @@ class LibraryIdentityTest {
                 trackBackgrounds = mapOf(2L to "fond.img"),
             ),
         )
-        counts.increment(1)
-        counts.increment(1)
-        counts.increment(3)
+        counts.increment(1, nowMs = 1_000)
+        counts.increment(1, nowMs = 2_000)
+        counts.increment(3, nowMs = 3_000)
         resume.edit {
             putString(PlaybackStateKeeper.KEY_QUEUE, "1,2,3")
             putString(PlaybackStateKeeper.KEY_CURRENT, "2")
@@ -61,6 +61,7 @@ class LibraryIdentityTest {
         assertEquals(listOf(1L, 20L), data.playlists.single().trackIds)
         assertEquals(mapOf(30L to "fond.img"), data.trackBackgrounds)
         assertEquals(mapOf(20L to 2, 1L to 1), counts.all())
+        assertEquals(mapOf(20L to 2_000L, 1L to 3_000L), counts.lastPlayed())
         assertEquals("20,30,1", resume.getString(PlaybackStateKeeper.KEY_QUEUE, null))
         assertEquals("30", resume.getString(PlaybackStateKeeper.KEY_CURRENT, null))
         assertEquals(12_000L, resume.getLong(PlaybackStateKeeper.KEY_POSITION, 0))
@@ -96,5 +97,15 @@ class LibraryIdentityTest {
         counts.remap(mapOf(1L to 3L))
 
         assertEquals(mapOf(3L to 3), counts.all())
+        // La dernière écoute est la plus récente des deux.
+        assertEquals(mapOf(3L to 3_000L), counts.lastPlayed())
+    }
+
+    @Test
+    fun `une dernière écoute seule suffit à faire suivre le morceau`() {
+        counts.prefs.edit(commit = true) { clear() }
+        counts.remap(mapOf(1L to 5L))
+
+        assertEquals(mapOf(5L to 2_000L, 3L to 3_000L), counts.lastPlayed())
     }
 }

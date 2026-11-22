@@ -1,5 +1,6 @@
 package fr.devsecopsforce.ongaku.ui
 
+import fr.devsecopsforce.ongaku.data.SmartList
 import fr.devsecopsforce.ongaku.data.albums
 import fr.devsecopsforce.ongaku.data.artists
 import fr.devsecopsforce.ongaku.data.track
@@ -17,7 +18,7 @@ class NavigationTest {
     @Test
     fun `chaque écran se retrouve après une rotation`() {
         val screens = listOf(
-            Detail.Search, Detail.Favorites, Detail.RecentlyAdded, Detail.Top50,
+            Detail.Search, Detail.Favorites, Detail.Smart(SmartList.RECENTLY_ADDED), Detail.Smart(SmartList.REDISCOVER),
             Detail.Settings, Detail.Stats, Detail.Appearance, Detail.Equalizer,
             Detail.PlaylistDetail("4f2c-liste"),
             Detail.Folder("Music/Anime/OST"),
@@ -63,4 +64,10 @@ class NavigationTest {
         val tracks = listOf(track(1, album = "X"))
         assertNull(findGroup("album:disparu|a", tracks.albums(), tracks.artists()))
     }
-}
+
+    @Test
+    fun `les anciens noms des listes automatiques se relisent`() {
+        assertEquals(Detail.Smart(SmartList.RECENTLY_ADDED), DetailCodec.decode(listOf("recent")))
+        assertEquals(Detail.Smart(SmartList.MOST_PLAYED), DetailCodec.decode(listOf("top50")))
+        assertNull(DetailCodec.decode(listOf("smart", "INCONNUE")))
+    }}
