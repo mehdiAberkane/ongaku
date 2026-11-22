@@ -65,10 +65,11 @@ class ListeningHistory private constructor(context: Context) {
      * même jour vu par deux sauvegardes, pas deux écoutes à additionner).
      */
     fun merge(imported: List<Play>, importedDays: Map<LocalDate, Long>) {
-        update { plays ->
-            val known = plays.mapTo(HashSet()) { it.timeMs to it.title.searchKey() }
-            (plays + imported.filter { (it.timeMs to it.title.searchKey()) !in known }).sortedBy { it.timeMs }
-        }
+        val known = _plays.value.mapTo(HashSet()) { it.timeMs to it.title.searchKey() }
+        val added = imported.filter { (it.timeMs to it.title.searchKey()) !in known }
+        // Rien de nouveau : aucun fichier n'est écrit.
+        if (added.isNotEmpty()) update { plays -> (plays + added).sortedBy { it.timeMs } }
+        if (importedDays.isEmpty()) return
         synchronized(lock) {
             val merged = _days.value.toMutableMap()
             importedDays.forEach { (day, ms) -> merged[day] = maxOf(merged[day] ?: 0L, ms) }

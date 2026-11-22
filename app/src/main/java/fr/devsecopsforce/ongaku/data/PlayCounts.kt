@@ -37,6 +37,24 @@ class PlayCounts(context: Context) {
     fun referencedIds(): Set<Long> = all().keys + lastPlayed().keys
 
     /**
+     * Écoutes d'une sauvegarde : pour chaque morceau, le plus grand nombre et la plus récente
+     * écoute. Réimporter sur le même téléphone ne double donc rien.
+     */
+    fun mergeMax(imported: Map<Long, Pair<Int, Long>>) {
+        val counts = all()
+        val times = lastPlayed()
+        // Seules les valeurs plus grandes s'écrivent : rien à écrire, aucun fichier n'est touché.
+        val newTimes = imported.filter { (id, value) -> value.second > (times[id] ?: 0L) }
+        val newCounts = imported.filter { (id, value) -> value.first > (counts[id] ?: 0) }
+        if (newTimes.isNotEmpty()) {
+            lastPlayedPrefs.edit(commit = true) { newTimes.forEach { (id, value) -> putLong(id.toString(), value.second) } }
+        }
+        if (newCounts.isNotEmpty()) {
+            prefs.edit(commit = true) { newCounts.forEach { (id, value) -> putInt(id.toString(), value.first) } }
+        }
+    }
+
+    /**
      * Reporte les écoutes sur les nouveaux identifiants ; deux anciens vers un même morceau
      * additionnent leurs écoutes et gardent la plus récente.
      */

@@ -34,6 +34,11 @@ class AppearanceStore private constructor(context: Context) {
     /** Couleur tirée de la pochette en cours ; jamais enregistrée, elle change avec le morceau. */
     val artworkAccent = MutableStateFlow<Int?>(null)
 
+    /** Relit les préférences, après la restauration d'une sauvegarde. */
+    fun reload() {
+        _state.value = load()
+    }
+
     fun update(transform: (Appearance) -> Appearance) {
         val updated = transform(_state.value)
         _state.value = updated

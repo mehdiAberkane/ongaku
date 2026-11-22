@@ -251,7 +251,8 @@
     <string name="settings_artists">Artistes</string>
     <string name="settings_merge_featuring">Ranger « A feat. B » sous l\'artiste A</string>
     <string name="settings_merge_featuring_note">Les tags de tes fichiers ne sont pas modifiés.</string>
-    <string name="settings_backup">Sauvegarde des listes</string>
+    <string name="settings_backup">Sauvegarde complète</string>
+    <string name="settings_backup_note">Listes, favoris, listes par règle, historique et compteurs d\'écoute, réglages, apparence, filtres, égaliseur et images de fond. L\'import ajoute sans rien effacer ; les réglages sont repris de la sauvegarde.</string>
     <string name="settings_backup_drive_note">Pour Google Drive, choisis Drive dans la fenêtre qui s\'ouvre.</string>
     <string name="settings_export">Exporter</string>
     <string name="settings_import">Importer</string>
@@ -314,7 +315,7 @@
     <string name="data_playlist_name_exists">Une liste « %1$s » existe déjà.</string>
     <string name="backup_exported">Sauvegarde exportée.</string>
     <string name="backup_export_failed">Export impossible.</string>
-    <string name="backup_too_large">Fichier trop lourd pour une sauvegarde Ongaku (plus de 5 Mo).</string>
+    <string name="backup_too_large">Fichier trop lourd pour une sauvegarde Ongaku.</string>
     <string name="backup_not_ongaku">Ce fichier n\'est pas une sauvegarde Ongaku.</string>
     <string name="backup_read_failed">Lecture du fichier impossible.</string>
     <string name="backup_import_done">Import terminé : %1$d liste(s)%2$s.</string>
