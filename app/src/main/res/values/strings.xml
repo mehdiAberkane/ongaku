@@ -430,4 +430,7 @@
     <string name="stats_top_artist">Artiste de l\'année</string>
     <string name="stats_top_album">Album de l\'année</string>
     <string name="stats_history">Dernières écoutes</string>
+    <!-- Deux colonnes -->
+    <string name="player_nothing_playing">Choisis un morceau : il s\'affichera ici.</string>
+
 </resources>

@@ -16,6 +16,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,11 +56,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import fr.devsecopsforce.ongaku.R
@@ -300,271 +306,301 @@ fun OngakuApp(
         null -> stringResource(R.string.app_name)
     }
 
+    // Paysage et grand écran : la bibliothèque à gauche, le lecteur toujours visible à droite.
+    val configuration = LocalConfiguration.current
+    val twoPane = PaneLayout.twoPane(configuration.screenWidthDp, configuration.screenHeightDp)
+
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         BackgroundImage(appData.backgroundFile(data.appBackground))
 
-        Scaffold(
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onBackground,
-            topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                    ),
-                    title = { Text(detailTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    navigationIcon = {
-                        if (currentDetail != null) {
-                            IconButton(onClick = goBack) {
-                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.common_back))
-                            }
-                        }
+        Row(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    topBar = {
+                        TopAppBar(
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                            ),
+                            title = { Text(detailTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            navigationIcon = {
+                                if (currentDetail != null) {
+                                    IconButton(onClick = goBack) {
+                                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.common_back))
+                                    }
+                                }
+                            },
+                            actions = {
+                                // Album, artiste, favoris ou liste ouverts : tout ajouter à la file.
+                                val detailTracks = when (currentDetail) {
+                                    is Detail.Group -> openGroup?.tracks.orEmpty()
+                                    Detail.Favorites -> favoriteTracks
+                                    is Detail.Smart -> smartTracks
+                                    is Detail.Folder -> folderTracks
+                                    is Detail.PlaylistDetail -> playlistTracks
+                                    is Detail.RuleListDetail -> ruleTracks
+                                    else -> emptyList()
+                                }
+                                if (detailTracks.isNotEmpty()) {
+                                    QueueMenuButton(
+                                        onPlayNext = { enqueue(detailTracks, true) },
+                                        onAddToQueue = { enqueue(detailTracks, false) },
+                                        onAddToPlaylist = { adding = detailTracks.map { it.id } },
+                                    )
+                                }
+                                if (currentPlaylist != null) {
+                                    IconButton(onClick = { renamingId = currentPlaylist.id }) {
+                                        Icon(Icons.Rounded.Edit, stringResource(R.string.main_rename_playlist))
+                                    }
+                                    IconButton(onClick = { deletingId = currentPlaylist.id }) {
+                                        Icon(Icons.Rounded.Delete, stringResource(R.string.main_delete_playlist))
+                                    }
+                                } else if (currentRule != null) {
+                                    IconButton(onClick = { editingRuleId = currentRule.id }) {
+                                        Icon(Icons.Rounded.Edit, stringResource(R.string.rule_edit))
+                                    }
+                                    IconButton(onClick = { deletingRuleId = currentRule.id }) {
+                                        Icon(Icons.Rounded.Delete, stringResource(R.string.rule_delete))
+                                    }
+                                } else if (currentDetail == null) {
+                                    IconButton(onClick = { detail = Detail.Search }) {
+                                        Icon(Icons.Rounded.Search, stringResource(R.string.main_title_search))
+                                    }
+                                    IconButton(onClick = { detail = Detail.Appearance }) {
+                                        Icon(Icons.Rounded.Palette, stringResource(R.string.main_title_appearance))
+                                    }
+                                    IconButton(onClick = { detail = Detail.Stats }) {
+                                        Icon(Icons.Rounded.Info, stringResource(R.string.main_title_stats))
+                                    }
+                                    IconButton(onClick = { detail = Detail.Settings }) {
+                                        Icon(Icons.Rounded.Settings, stringResource(R.string.main_title_settings))
+                                    }
+                                }
+                            },
+                        )
                     },
-                    actions = {
-                        // Album, artiste, favoris ou liste ouverts : tout ajouter à la file.
-                        val detailTracks = when (currentDetail) {
-                            is Detail.Group -> openGroup?.tracks.orEmpty()
-                            Detail.Favorites -> favoriteTracks
-                            is Detail.Smart -> smartTracks
-                            is Detail.Folder -> folderTracks
-                            is Detail.PlaylistDetail -> playlistTracks
-                            is Detail.RuleListDetail -> ruleTracks
-                            else -> emptyList()
-                        }
-                        if (detailTracks.isNotEmpty()) {
-                            QueueMenuButton(
-                                onPlayNext = { enqueue(detailTracks, true) },
-                                onAddToQueue = { enqueue(detailTracks, false) },
-                                onAddToPlaylist = { adding = detailTracks.map { it.id } },
+                    bottomBar = {
+                        // En deux colonnes, le lecteur est déjà affiché à droite.
+                        if (player.current != null && !twoPane) {
+                            MiniPlayer(
+                                player = player,
+                                onOpen = { playerOpen = true },
+                                onPlayPause = playerViewModel::togglePlayPause,
+                                onNext = playerViewModel::next,
                             )
                         }
-                        if (currentPlaylist != null) {
-                            IconButton(onClick = { renamingId = currentPlaylist.id }) {
-                                Icon(Icons.Rounded.Edit, stringResource(R.string.main_rename_playlist))
-                            }
-                            IconButton(onClick = { deletingId = currentPlaylist.id }) {
-                                Icon(Icons.Rounded.Delete, stringResource(R.string.main_delete_playlist))
-                            }
-                        } else if (currentRule != null) {
-                            IconButton(onClick = { editingRuleId = currentRule.id }) {
-                                Icon(Icons.Rounded.Edit, stringResource(R.string.rule_edit))
-                            }
-                            IconButton(onClick = { deletingRuleId = currentRule.id }) {
-                                Icon(Icons.Rounded.Delete, stringResource(R.string.rule_delete))
-                            }
-                        } else if (currentDetail == null) {
-                            IconButton(onClick = { detail = Detail.Search }) {
-                                Icon(Icons.Rounded.Search, stringResource(R.string.main_title_search))
-                            }
-                            IconButton(onClick = { detail = Detail.Appearance }) {
-                                Icon(Icons.Rounded.Palette, stringResource(R.string.main_title_appearance))
-                            }
-                            IconButton(onClick = { detail = Detail.Stats }) {
-                                Icon(Icons.Rounded.Info, stringResource(R.string.main_title_stats))
-                            }
-                            IconButton(onClick = { detail = Detail.Settings }) {
-                                Icon(Icons.Rounded.Settings, stringResource(R.string.main_title_settings))
-                            }
-                        }
                     },
-                )
-            },
-            bottomBar = {
-                if (player.current != null) {
-                    MiniPlayer(
-                        player = player,
-                        onOpen = { playerOpen = true },
-                        onPlayPause = playerViewModel::togglePlayPause,
-                        onNext = playerViewModel::next,
-                    )
-                }
-            },
-        ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize()) {
-                val currentId = player.current?.mediaId
-                when {
-                    library.error != null -> CenteredMessage(library.error.orEmpty()) {
-                        Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_retry)) }
-                    }
-                    !library.loaded -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                    // Les réglages restent accessibles, sinon un filtre trop strict serait sans retour.
-                    library.tracks.isEmpty() && currentDetail != Detail.Settings &&
-                        currentDetail != Detail.Appearance && currentDetail != Detail.Stats &&
-                        currentDetail != Detail.Equalizer -> CenteredMessage(
-                        stringResource(
-                            if (library.allTracks.isEmpty()) R.string.main_no_music else R.string.main_all_filtered,
-                        ),
-                    ) {
-                        Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_search_again)) }
-                    }
-                    // Le temps de retrouver le groupe ou de revenir en arrière : rien à afficher.
-                    currentDetail is Detail.Group -> if (openGroup != null) GroupTrackList(
-                        group = openGroup,
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                    )
-                    currentDetail == Detail.Search -> SearchScreen(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        tracks = sortedTracks,
-                        albums = sortedAlbums,
-                        artists = artists,
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                        onOpenGroup = { detail = Detail.Group(it.key, from = Detail.Search) },
-                    )
-                    currentDetail == Detail.Favorites -> WithMissingBanner(
-                        missing = data.favorites.count { it !in existingIds },
-                        onRemove = { appData.removeMissingFavorites(existingIds) },
-                    ) {
-                        Column(Modifier.fillMaxSize()) {
-                            if (favoriteTracks.isNotEmpty()) {
-                                PlayAllButtons { shuffled -> playerViewModel.playAll(favoriteTracks, shuffled) }
+                ) { padding ->
+                    Box(Modifier.padding(padding).fillMaxSize()) {
+                        val currentId = player.current?.mediaId
+                        when {
+                            library.error != null -> CenteredMessage(library.error.orEmpty()) {
+                                Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_retry)) }
                             }
-                            TrackList(
-                                tracks = favoriteTracks,
+                            !library.loaded -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                            // Les réglages restent accessibles, sinon un filtre trop strict serait sans retour.
+                            library.tracks.isEmpty() && currentDetail != Detail.Settings &&
+                                currentDetail != Detail.Appearance && currentDetail != Detail.Stats &&
+                                currentDetail != Detail.Equalizer -> CenteredMessage(
+                                stringResource(
+                                    if (library.allTracks.isEmpty()) R.string.main_no_music else R.string.main_all_filtered,
+                                ),
+                            ) {
+                                Button(onClick = libraryViewModel::refresh) { Text(stringResource(R.string.main_search_again)) }
+                            }
+                            // Le temps de retrouver le groupe ou de revenir en arrière : rien à afficher.
+                            currentDetail is Detail.Group -> if (openGroup != null) GroupTrackList(
+                                group = openGroup,
                                 currentId = currentId,
                                 actions = actions,
                                 onPlay = playerViewModel::play,
-                                emptyMessage = stringResource(R.string.library_favorites_empty),
+                            )
+                            currentDetail == Detail.Search -> SearchScreen(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                tracks = sortedTracks,
+                                albums = sortedAlbums,
+                                artists = artists,
+                                currentId = currentId,
+                                actions = actions,
+                                onPlay = playerViewModel::play,
+                                onOpenGroup = { detail = Detail.Group(it.key, from = Detail.Search) },
+                            )
+                            currentDetail == Detail.Favorites -> WithMissingBanner(
+                                missing = data.favorites.count { it !in existingIds },
+                                onRemove = { appData.removeMissingFavorites(existingIds) },
+                            ) {
+                                Column(Modifier.fillMaxSize()) {
+                                    if (favoriteTracks.isNotEmpty()) {
+                                        PlayAllButtons { shuffled -> playerViewModel.playAll(favoriteTracks, shuffled) }
+                                    }
+                                    TrackList(
+                                        tracks = favoriteTracks,
+                                        currentId = currentId,
+                                        actions = actions,
+                                        onPlay = playerViewModel::play,
+                                        emptyMessage = stringResource(R.string.library_favorites_empty),
+                                    )
+                                }
+                            }
+                            currentDetail is Detail.Smart -> SmartListScreen(
+                                kind = currentDetail.kind,
+                                tracks = smartTracks,
+                                counts = counts,
+                                currentId = currentId,
+                                actions = actions,
+                                onPlay = playerViewModel::play,
+                                onPlayAll = playerViewModel::playAll,
+                            )
+                            currentDetail is Detail.RuleListDetail -> Column(Modifier.fillMaxSize()) {
+                                if (ruleTracks.isNotEmpty()) {
+                                    PlayAllButtons { shuffled -> playerViewModel.playAll(ruleTracks, shuffled) }
+                                }
+                                TrackList(
+                                    tracks = ruleTracks,
+                                    currentId = currentId,
+                                    actions = actions,
+                                    onPlay = playerViewModel::play,
+                                    emptyMessage = stringResource(R.string.rule_empty),
+                                )
+                            }
+                            currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
+                                missing = currentPlaylist?.trackIds.orEmpty().count { it !in existingIds },
+                                onRemove = {
+                                    appData.removeMissingFromPlaylist(currentDetail.id, existingIds)
+                                },
+                            ) {
+                                ReorderableTrackList(
+                                    tracks = playlistTracks,
+                                    onReorder = { order -> appData.reorderPlaylist(currentDetail.id, order) },
+                                    currentId = currentId,
+                                    actions = remember(actions, currentDetail.id) {
+                                        actions.copy(
+                                            removeFromPlaylist = { trackId ->
+                                                appData.removeFromPlaylist(currentDetail.id, trackId)
+                                            },
+                                        )
+                                    },
+                                    onPlay = playerViewModel::play,
+                                    emptyMessage = stringResource(R.string.library_playlist_empty),
+                                )
+                            }
+                            currentDetail == Detail.Settings -> SettingsScreen(
+                                settings = settings,
+                                allTracks = library.allTracks,
+                                visibleCount = library.tracks.size,
+                                mergeFeaturing = mergeFeaturing,
+                                onMergeFeaturingChange = {
+                                    mergeFeaturing = it
+                                    settings.mergeFeaturing = it
+                                },
+                                // Tous les morceaux : un filtre ne doit pas vider la sauvegarde des listes.
+                                onExport = { appData.exportBackup(it, library.allTracks) },
+                                onImport = { appData.importBackup(it, library.allTracks) },
+                                onOpenEqualizer = { detail = Detail.Equalizer },
+                                smartSize = smartSize,
+                                onSmartSizeChange = {
+                                    smartSize = it
+                                    settings.smartListSize = it
+                                },
+                            )
+                            currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
+                            currentDetail == Detail.Equalizer -> EqualizerScreen()
+                            currentDetail is Detail.Folder -> FolderBrowser(
+                                view = folderView ?: FolderTree.View(currentDetail.path, emptyList(), emptyList()),
+                                allTracks = folderTracks,
+                                showPlayAll = true,
+                                currentId = currentId,
+                                actions = actions,
+                                onPlay = playerViewModel::play,
+                                onPlayAll = playerViewModel::playAll,
+                                onOpenFolder = { detail = Detail.Folder(it) },
+                            )
+                            currentDetail == Detail.Appearance -> AppearanceScreen(
+                                data = data,
+                                backgroundFile = appData::backgroundFile,
+                                onPick = pickImage,
+                                onRemove = appData::removeBackground,
+                                // Tous les morceaux : un morceau masqué par le filtre n'a pas disparu.
+                                missingTrackImages = data.missingTrackBackgrounds(existingIds).size,
+                                onRemoveMissing = { appData.removeMissingBackgrounds(existingIds) },
+                            )
+                            else -> LibraryTabs(
+                                tab = tab,
+                                onTabChange = { tab = it },
+                                tracks = sortedTracks,
+                                trackSort = trackSort,
+                                onTrackSortChange = {
+                                    trackSort = it
+                                    sortStore.trackSort = it
+                                },
+                                albums = sortedAlbums,
+                                albumSort = albumSort,
+                                onAlbumSortChange = {
+                                    albumSort = it
+                                    sortStore.albumSort = it
+                                },
+                                artists = artists,
+                                currentId = currentId,
+                                actions = actions,
+                                onPlay = playerViewModel::play,
+                                // « Lire » suit l'ordre affiché.
+                                onPlayAll = { shuffled -> playerViewModel.playAll(sortedTracks, shuffled) },
+                                onOpenGroup = { detail = Detail.Group(it.key) },
+                                onOpenFavorites = { detail = Detail.Favorites },
+                                smartSize = smartSize,
+                                onOpenSmart = { detail = Detail.Smart(it) },
+                                onOpenPlaylist = { detail = Detail.PlaylistDetail(it.id) },
+                                onCreatePlaylist = { creatingPlaylist = true },
+                                ruleCounts = ruleCounts,
+                                onOpenRuleList = { detail = Detail.RuleListDetail(it.id) },
+                                onCreateRuleList = { editingRuleId = "" },
+                                existingIds = existingIds,
+                                folders = folderRoot,
+                                onOpenFolder = { detail = Detail.Folder(it) },
+                                genres = genres,
+                                decades = decades,
+                                albumGrid = albumGrid,
+                                onAlbumGridChange = {
+                                    albumGrid = it
+                                    sortStore.albumGrid = it
+                                },
                             )
                         }
                     }
-                    currentDetail is Detail.Smart -> SmartListScreen(
-                        kind = currentDetail.kind,
-                        tracks = smartTracks,
-                        counts = counts,
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                        onPlayAll = playerViewModel::playAll,
-                    )
-                    currentDetail is Detail.RuleListDetail -> Column(Modifier.fillMaxSize()) {
-                        if (ruleTracks.isNotEmpty()) {
-                            PlayAllButtons { shuffled -> playerViewModel.playAll(ruleTracks, shuffled) }
-                        }
-                        TrackList(
-                            tracks = ruleTracks,
-                            currentId = currentId,
+                }
+            }
+
+            if (twoPane) {
+                VerticalDivider()
+                Box(Modifier.width(PaneLayout.playerWidthDp(configuration.screenWidthDp).dp).fillMaxHeight()) {
+                    if (player.current != null) {
+                        val trackId = player.current?.mediaId?.toLongOrNull()
+                        FullPlayer(
+                            player = player,
+                            viewModel = playerViewModel,
+                            trackId = trackId,
                             actions = actions,
-                            onPlay = playerViewModel::play,
-                            emptyMessage = stringResource(R.string.rule_empty),
+                            background = appData.backgroundFile(playerBackgroundName(data, trackId)),
+                            onClose = null,
+                            onAddQueueToPlaylist = { ids -> adding = ids },
                         )
+                    } else {
+                        CenteredMessage(stringResource(R.string.player_nothing_playing))
                     }
-                    currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
-                        missing = currentPlaylist?.trackIds.orEmpty().count { it !in existingIds },
-                        onRemove = {
-                            appData.removeMissingFromPlaylist(currentDetail.id, existingIds)
-                        },
-                    ) {
-                        ReorderableTrackList(
-                            tracks = playlistTracks,
-                            onReorder = { order -> appData.reorderPlaylist(currentDetail.id, order) },
-                            currentId = currentId,
-                            actions = remember(actions, currentDetail.id) {
-                                actions.copy(
-                                    removeFromPlaylist = { trackId ->
-                                        appData.removeFromPlaylist(currentDetail.id, trackId)
-                                    },
-                                )
-                            },
-                            onPlay = playerViewModel::play,
-                            emptyMessage = stringResource(R.string.library_playlist_empty),
-                        )
-                    }
-                    currentDetail == Detail.Settings -> SettingsScreen(
-                        settings = settings,
-                        allTracks = library.allTracks,
-                        visibleCount = library.tracks.size,
-                        mergeFeaturing = mergeFeaturing,
-                        onMergeFeaturingChange = {
-                            mergeFeaturing = it
-                            settings.mergeFeaturing = it
-                        },
-                        // Tous les morceaux : un filtre ne doit pas vider la sauvegarde des listes.
-                        onExport = { appData.exportBackup(it, library.allTracks) },
-                        onImport = { appData.importBackup(it, library.allTracks) },
-                        onOpenEqualizer = { detail = Detail.Equalizer },
-                        smartSize = smartSize,
-                        onSmartSizeChange = {
-                            smartSize = it
-                            settings.smartListSize = it
-                        },
-                    )
-                    currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
-                    currentDetail == Detail.Equalizer -> EqualizerScreen()
-                    currentDetail is Detail.Folder -> FolderBrowser(
-                        view = folderView ?: FolderTree.View(currentDetail.path, emptyList(), emptyList()),
-                        allTracks = folderTracks,
-                        showPlayAll = true,
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                        onPlayAll = playerViewModel::playAll,
-                        onOpenFolder = { detail = Detail.Folder(it) },
-                    )
-                    currentDetail == Detail.Appearance -> AppearanceScreen(
-                        data = data,
-                        backgroundFile = appData::backgroundFile,
-                        onPick = pickImage,
-                        onRemove = appData::removeBackground,
-                        // Tous les morceaux : un morceau masqué par le filtre n'a pas disparu.
-                        missingTrackImages = data.missingTrackBackgrounds(existingIds).size,
-                        onRemoveMissing = { appData.removeMissingBackgrounds(existingIds) },
-                    )
-                    else -> LibraryTabs(
-                        tab = tab,
-                        onTabChange = { tab = it },
-                        tracks = sortedTracks,
-                        trackSort = trackSort,
-                        onTrackSortChange = {
-                            trackSort = it
-                            sortStore.trackSort = it
-                        },
-                        albums = sortedAlbums,
-                        albumSort = albumSort,
-                        onAlbumSortChange = {
-                            albumSort = it
-                            sortStore.albumSort = it
-                        },
-                        artists = artists,
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                        // « Lire » suit l'ordre affiché.
-                        onPlayAll = { shuffled -> playerViewModel.playAll(sortedTracks, shuffled) },
-                        onOpenGroup = { detail = Detail.Group(it.key) },
-                        onOpenFavorites = { detail = Detail.Favorites },
-                        smartSize = smartSize,
-                        onOpenSmart = { detail = Detail.Smart(it) },
-                        onOpenPlaylist = { detail = Detail.PlaylistDetail(it.id) },
-                        onCreatePlaylist = { creatingPlaylist = true },
-                        ruleCounts = ruleCounts,
-                        onOpenRuleList = { detail = Detail.RuleListDetail(it.id) },
-                        onCreateRuleList = { editingRuleId = "" },
-                        existingIds = existingIds,
-                        folders = folderRoot,
-                        onOpenFolder = { detail = Detail.Folder(it) },
-                        genres = genres,
-                        decades = decades,
-                        albumGrid = albumGrid,
-                        onAlbumGridChange = {
-                            albumGrid = it
-                            sortStore.albumGrid = it
-                        },
-                    )
                 }
             }
         }
 
-        if (detail != null && !playerOpen) {
+        val playerOverlay = playerOpen && player.current != null && !twoPane
+        if (detail != null && !playerOverlay) {
             BackHandler(onBack = goBack)
         }
 
-        if (playerOpen && player.current != null) {
+        if (playerOverlay) {
             BackHandler { playerOpen = false }
             val trackId = player.current?.mediaId?.toLongOrNull()
             FullPlayer(

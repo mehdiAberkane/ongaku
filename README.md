@@ -19,6 +19,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
 - **Listes automatiques** : ajouts récents, Top, écoutés récemment, jamais écoutés, moins écoutés,
   redécouvertes (taille réglable) ; listes par règle (genre, années, durée, dossier) qui se mettent
   à jour seules.
+- **Paysage et tablette** : bibliothèque à gauche et lecteur toujours visible à droite quand
+  l'écran est assez large.
 - **Android Auto** : favoris, listes, albums, artistes et ajouts récents depuis la voiture,
   recherche vocale ; « Joue … sur Ongaku » marche aussi avec l'Assistant.
 - **Statistiques** : historique daté des écoutes, temps écouté par jour, semaine, mois et année,
