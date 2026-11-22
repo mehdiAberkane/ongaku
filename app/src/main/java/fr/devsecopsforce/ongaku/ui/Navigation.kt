@@ -3,6 +3,7 @@
 package fr.devsecopsforce.ongaku.ui
 
 import androidx.compose.runtime.saveable.Saver
+import fr.devsecopsforce.ongaku.data.FolderTree
 import fr.devsecopsforce.ongaku.data.TrackGroup
 
 internal sealed interface Detail {
@@ -20,6 +21,9 @@ internal sealed interface Detail {
     data object Stats : Detail
     data object Appearance : Detail
     data object Equalizer : Detail
+
+    /** Dossier du téléphone, par son chemin ([FolderTree]) ; la racine est l'onglet Dossiers. */
+    data class Folder(val path: String) : Detail
 }
 
 internal object DetailCodec {
@@ -35,6 +39,7 @@ internal object DetailCodec {
         Detail.Stats -> listOf("stats")
         Detail.Appearance -> listOf("appearance")
         Detail.Equalizer -> listOf("equalizer")
+        is Detail.Folder -> listOf("folder", detail.path)
     }
 
     /** null pour une forme inconnue : on revient alors aux onglets. */
@@ -51,6 +56,7 @@ internal object DetailCodec {
             "stats" -> Detail.Stats
             "appearance" -> Detail.Appearance
             "equalizer" -> Detail.Equalizer
+            "folder" -> saved.getOrNull(1)?.let(Detail::Folder)
             else -> null
         }
     }

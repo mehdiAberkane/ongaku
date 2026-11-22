@@ -63,6 +63,7 @@ import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.AlbumSort
 import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.AppDataStore
+import fr.devsecopsforce.ongaku.data.FolderTree
 import fr.devsecopsforce.ongaku.data.LibraryIdentity
 import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
@@ -204,6 +205,7 @@ fun OngakuApp(
             is Detail.Group -> open.from
             // Ouvert depuis les réglages : on y revient.
             Detail.Equalizer -> Detail.Settings
+            is Detail.Folder -> FolderTree.parent(open.path)?.takeIf { it.isNotEmpty() }?.let(Detail::Folder)
             else -> null
         }
     }
@@ -224,6 +226,13 @@ fun OngakuApp(
     val currentDetail = detail
     val currentPlaylist = (currentDetail as? Detail.PlaylistDetail)
         ?.let { open -> data.playlists.firstOrNull { it.id == open.id } }
+    // Dossiers : la racine pour l'onglet, le dossier ouvert et tous ses morceaux pour la lecture.
+    val folderRoot = remember(library.tracks) { FolderTree.view(library.tracks, "") }
+    val folderPath = (currentDetail as? Detail.Folder)?.path
+    val folderView = remember(folderPath, library.tracks) { folderPath?.let { FolderTree.view(library.tracks, it) } }
+    val folderTracks = remember(folderPath, library.tracks) {
+        folderPath?.let { FolderTree.tracksUnder(library.tracks, it) }.orEmpty()
+    }
     val renamingPlaylist = renamingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
     val deletingPlaylist = deletingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
     // Retrouvé dans la bibliothèque actuelle : la page suit un morceau ajouté ou retiré.
@@ -252,6 +261,7 @@ fun OngakuApp(
         Detail.Stats -> stringResource(R.string.main_title_stats)
         Detail.Appearance -> stringResource(R.string.main_title_appearance)
         Detail.Equalizer -> stringResource(R.string.eq_title)
+        is Detail.Folder -> FolderTree.name(currentDetail.path)
         null -> stringResource(R.string.app_name)
     }
 
@@ -279,6 +289,7 @@ fun OngakuApp(
                         val detailTracks = when (currentDetail) {
                             is Detail.Group -> openGroup?.tracks.orEmpty()
                             Detail.Favorites -> favoriteTracks
+                            is Detail.Folder -> folderTracks
                             is Detail.PlaylistDetail -> playlistTracks
                             else -> emptyList()
                         }
@@ -439,6 +450,16 @@ fun OngakuApp(
                     )
                     currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
                     currentDetail == Detail.Equalizer -> EqualizerScreen()
+                    currentDetail is Detail.Folder -> FolderBrowser(
+                        view = folderView ?: FolderTree.View(currentDetail.path, emptyList(), emptyList()),
+                        allTracks = folderTracks,
+                        showPlayAll = true,
+                        currentId = currentId,
+                        actions = actions,
+                        onPlay = playerViewModel::play,
+                        onPlayAll = playerViewModel::playAll,
+                        onOpenFolder = { detail = Detail.Folder(it) },
+                    )
                     currentDetail == Detail.Appearance -> AppearanceScreen(
                         data = data,
                         backgroundFile = appData::backgroundFile,
@@ -476,6 +497,8 @@ fun OngakuApp(
                         onOpenPlaylist = { detail = Detail.PlaylistDetail(it.id) },
                         onCreatePlaylist = { creatingPlaylist = true },
                         existingIds = existingIds,
+                        folders = folderRoot,
+                        onOpenFolder = { detail = Detail.Folder(it) },
                     )
                 }
             }

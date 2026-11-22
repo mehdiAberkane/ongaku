@@ -81,6 +81,7 @@ import fr.devsecopsforce.ongaku.data.AppData
 import fr.devsecopsforce.ongaku.data.GroupRow
 import fr.devsecopsforce.ongaku.data.Playlist
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
+import fr.devsecopsforce.ongaku.data.FolderTree
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackGroup
 import fr.devsecopsforce.ongaku.data.TrackSort
@@ -114,6 +115,8 @@ internal fun LibraryTabs(
     onOpenPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
     existingIds: Set<Long>,
+    folders: FolderTree.View,
+    onOpenFolder: (String) -> Unit,
 ) {
     // Index par lettre seulement quand la liste est rangée par ordre alphabétique.
     val trackLetters = remember(tracks, trackSort) {
@@ -156,6 +159,16 @@ internal fun LibraryTabs(
                 )
             }
             2 -> GroupList(artists, onOpenGroup, letters = artistLetters, subtitle = { groupSubtitle(it) })
+            4 -> FolderBrowser(
+                view = folders,
+                allTracks = emptyList(),
+                showPlayAll = false,
+                currentId = currentId,
+                actions = actions,
+                onPlay = onPlay,
+                onPlayAll = { _, _ -> },
+                onOpenFolder = onOpenFolder,
+            )
             else -> PlaylistsTab(
                 actions.data,
                 existingIds,
@@ -603,4 +616,5 @@ internal val LIBRARY_TABS = listOf(
     R.string.library_tab_albums,
     R.string.library_tab_artists,
     R.string.library_tab_playlists,
+    R.string.library_tab_folders,
 )
