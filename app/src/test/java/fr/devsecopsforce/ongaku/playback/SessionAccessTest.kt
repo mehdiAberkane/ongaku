@@ -36,4 +36,13 @@ class SessionAccessTest {
         assertFalse(SessionAccess.allowed("com.google.android.projection.gearhead", own, trusted = false, systemApp = false))
         // Une application système quelconque n'en profite pas.
         assertFalse(SessionAccess.allowed("com.example.systeme", own, trusted = false, systemApp = true))
+    }
+
+    @Test
+    fun `la liaison par l'ancienne interface passe, le vrai demandeur est jugé à la connexion`() {
+        assertTrue(SessionAccess.bindingAllowed(SessionAccess.LEGACY_BINDING, own, trusted = false))
+        // À la connexion, ce nom générique n'a aucun droit.
+        assertFalse(SessionAccess.allowed(SessionAccess.LEGACY_BINDING, own, trusted = false))
+        assertFalse(SessionAccess.bindingAllowed("com.example.espion", own, trusted = false))
+        assertTrue(SessionAccess.bindingAllowed(own, own, trusted = false))
     }}

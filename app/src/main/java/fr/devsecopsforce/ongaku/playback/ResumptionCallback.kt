@@ -75,6 +75,8 @@ class ResumptionCallback(
     private val scope: CoroutineScope,
     private val autoplay: AutoplayGuard,
     private val sleepTimer: () -> SleepTimer?,
+    /** Android Auto ou l'Assistant installés avec le système : voir [SessionAccess]. */
+    private val isCarSystemApp: (String) -> Boolean,
 ) : MediaLibrarySession.Callback {
     private val car = CarLibrary(context, scope)
 
@@ -82,7 +84,9 @@ class ResumptionCallback(
         session: MediaLibrarySession,
         browser: MediaSession.ControllerInfo,
         params: LibraryParams?,
-    ): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(car.root(params))
+    ): ListenableFuture<LibraryResult<MediaItem>> {
+        return Futures.immediateFuture(car.root(params))
+    }
 
     override fun onGetChildren(
         session: MediaLibrarySession,
@@ -91,7 +95,9 @@ class ResumptionCallback(
         page: Int,
         pageSize: Int,
         params: LibraryParams?,
-    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = car.children(parentId, page, pageSize, params)
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+        return car.children(parentId, page, pageSize, params)
+    }
 
     override fun onGetItem(
         session: MediaLibrarySession,
@@ -136,9 +142,14 @@ class ResumptionCallback(
         session: MediaSession,
         controller: MediaSession.ControllerInfo,
     ): MediaSession.ConnectionResult {
+        // Le vrai demandeur, y compris quand il s'est lié par l'ancienne interface (Android Auto).
+        val pkg = controller.packageName
+        if (!SessionAccess.allowed(pkg, context.packageName, controller.isTrusted, isCarSystemApp(pkg))) {
+            return MediaSession.ConnectionResult.reject()
+        }
         // Les commandes de file ne sont proposées qu'à Ongaku lui-même ; les autres applications
         // reçoivent la réponse par défaut de Media3.
-        if (controller.packageName != context.packageName) return super.onConnect(session, controller)
+        if (pkg != context.packageName) return super.onConnect(session, controller)
         return MediaSession.ConnectionResult.accept(
             MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                 .add(QueueCommands.ADD)
