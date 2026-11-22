@@ -15,7 +15,9 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ShuffleOrder
+import fr.devsecopsforce.ongaku.data.ListeningHistory
 import fr.devsecopsforce.ongaku.data.PlayCounts
+import fr.devsecopsforce.ongaku.data.Play
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 
 /**
@@ -37,6 +39,8 @@ class CrossfadeController(
     initialPlayer: ExoPlayer,
     private val settings: PlaybackSettings,
     private val playCounts: PlayCounts,
+    /** Écoutes datées et temps écouté par jour, pour les statistiques. */
+    private val history: ListeningHistory,
     /** Crée un lecteur de relève, sans focus audio : le lecteur actif le garde pendant le fondu. */
     private val createPlayer: () -> ExoPlayer,
     /** Le lecteur de relève devient le lecteur actif : la session doit le suivre. */
@@ -212,7 +216,12 @@ class CrossfadeController(
         if (currentTrackCounted) return
         if (!CrossfadeRules.shouldCountPlay(trackListenedMs(), player.knownDuration())) return
         currentTrackCounted = true
-        player.currentMediaItem?.mediaId?.toLongOrNull()?.let(playCounts::increment)
+        val item = player.currentMediaItem ?: return
+        val id = item.mediaId.toLongOrNull() ?: return
+        val now = System.currentTimeMillis()
+        playCounts.increment(id, now)
+        val tags = item.mediaMetadata
+        history.record(Play(now, id, tags.title?.toString().orEmpty(), tags.artist?.toString().orEmpty(), tags.albumTitle?.toString().orEmpty()))
     }
 
     /** Un seul réveil, au moment où le morceau atteindra le seuil d'une écoute. */
@@ -226,6 +235,7 @@ class CrossfadeController(
     private fun flushListening() {
         if (pendingListenedMs == 0L) return
         settings.listenedMs += pendingListenedMs
+        history.addListening(pendingListenedMs)
         pendingListenedMs = 0
     }
 

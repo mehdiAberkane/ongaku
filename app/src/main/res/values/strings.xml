@@ -411,4 +411,23 @@
         <item quantity="many">%1$d titres correspondent</item>
         <item quantity="other">%1$d titres correspondent</item>
     </plurals>
+    <!-- Historique et statistiques -->
+    <string name="stats_today">Aujourd\'hui</string>
+    <string name="stats_this_week">Cette semaine</string>
+    <string name="stats_this_month">Ce mois-ci</string>
+    <string name="stats_this_year">Cette année</string>
+    <string name="stats_history_starts">L\'historique commence avec cette version : chaque morceau écouté au moins 30 secondes s\'y ajoute, avec sa date. Tout reste sur le téléphone.</string>
+    <string name="stats_rankings">Classements</string>
+    <string name="stats_period_7">7 jours</string>
+    <string name="stats_period_30">30 jours</string>
+    <string name="stats_period_all">Depuis le début</string>
+    <string name="stats_kind_tracks">Morceaux</string>
+    <string name="stats_no_plays_period">Aucune écoute sur cette période.</string>
+    <string name="stats_year_review">Bilan de l\'année</string>
+    <string name="stats_plays">Écoutes</string>
+    <string name="stats_distinct_tracks">Morceaux différents</string>
+    <string name="stats_top_track">Morceau de l\'année</string>
+    <string name="stats_top_artist">Artiste de l\'année</string>
+    <string name="stats_top_album">Album de l\'année</string>
+    <string name="stats_history">Dernières écoutes</string>
 </resources>

@@ -25,6 +25,8 @@ class LibraryIdentityTest {
     @Before
     fun setUp() {
         LibraryIdentity.resetForTests()
+        ListeningHistory.resetForTests()
+        ListeningHistory.get(context).record(Play(5_000, 2, "Bravo", "Artiste", "Album"))
         store.save(
             AppData(
                 favorites = setOf(1, 2),
@@ -62,6 +64,7 @@ class LibraryIdentityTest {
         assertEquals(mapOf(30L to "fond.img"), data.trackBackgrounds)
         assertEquals(mapOf(20L to 2, 1L to 1), counts.all())
         assertEquals(mapOf(20L to 2_000L, 1L to 3_000L), counts.lastPlayed())
+        assertEquals(listOf(30L), ListeningHistory.get(context).plays.value.map { it.trackId })
         assertEquals("20,30,1", resume.getString(PlaybackStateKeeper.KEY_QUEUE, null))
         assertEquals("30", resume.getString(PlaybackStateKeeper.KEY_CURRENT, null))
         assertEquals(12_000L, resume.getLong(PlaybackStateKeeper.KEY_POSITION, 0))

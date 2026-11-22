@@ -1,5 +1,6 @@
 package fr.devsecopsforce.ongaku.data
 
+import java.time.LocalDate
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -18,9 +19,17 @@ object PlaylistBackup {
         val missingTracks: Int,
         /** Listes par règle : sans morceau, elles se recopient telles quelles. */
         val ruleLists: List<RuleList> = emptyList(),
+        /** Historique d'écoute ; l'identifiant vaut 0 pour un morceau absent de ce téléphone. */
+        val history: List<Play> = emptyList(),
+        val listeningDays: Map<LocalDate, Long> = emptyMap(),
     )
 
-    fun serialize(data: AppData, tracks: List<Track>): String {
+    fun serialize(
+        data: AppData,
+        tracks: List<Track>,
+        history: List<Play> = emptyList(),
+        listeningDays: Map<LocalDate, Long> = emptyMap(),
+    ): String {
         val byId = tracks.associateBy { it.id }
         fun refs(ids: Iterable<Long>) = JSONArray(ids.mapNotNull(byId::get).map(::toRef))
         return JSONObject()
@@ -46,7 +55,26 @@ object PlaylistBackup {
                     },
                 ),
             )
+            .put("history", historyJson(history, listeningDays))
             .toString(2)
+    }
+
+    /**
+     * Forme compacte : chaque morceau écouté est décrit une fois (titre, artiste, album), et chaque
+     * écoute ne garde que son heure et le numéro de ce morceau. Des années d'écoute tiennent ainsi
+     * sous la limite d'import ([ImportLimits.MAX_BACKUP_BYTES]).
+     */
+    private fun historyJson(history: List<Play>, days: Map<LocalDate, Long>): JSONObject {
+        val index = LinkedHashMap<Triple<String, String, String>, Int>()
+        val plays = JSONArray()
+        history.forEach { play ->
+            val number = index.getOrPut(Triple(play.title, play.artist, play.album)) { index.size }
+            plays.put(JSONArray().put(play.timeMs).put(number))
+        }
+        return JSONObject()
+            .put("tracks", JSONArray(index.keys.map { JSONArray().put(it.first).put(it.second).put(it.third) }))
+            .put("plays", plays)
+            .put("days", JSONObject().apply { days.forEach { (day, ms) -> put(day.toString(), ms) } })
     }
 
     private fun toRef(track: Track) = JSONObject()
@@ -96,7 +124,30 @@ object PlaylistBackup {
                 )
             }
         }.orEmpty()
-        return Imported(favorites, playlists, missing, ruleLists)
+        // Absent des sauvegardes d'avant l'historique.
+        val historyJson = root.optJSONObject("history")
+        val history = historyJson?.let { json ->
+            val described = json.getJSONArray("tracks").let { array ->
+                List(array.length()) { index ->
+                    val entry = array.getJSONArray(index)
+                    Triple(entry.getString(0), entry.getString(1), entry.getString(2))
+                }
+            }
+            json.getJSONArray("plays").let { array ->
+                List(array.length()) { index ->
+                    val entry = array.getJSONArray(index)
+                    val (title, artist, album) = described[entry.getInt(1)]
+                    val track = exact[Triple(title.norm(), artist.norm(), album.norm())] ?: loose[title.norm() to artist.norm()]
+                    Play(entry.getLong(0), track?.id ?: 0L, title, artist, album)
+                }
+            }
+        }.orEmpty()
+        val days = historyJson?.optJSONObject("days")?.let { json ->
+            json.keys().asSequence().mapNotNull { key ->
+                runCatching { LocalDate.parse(key) to json.getLong(key) }.getOrNull()
+            }.toMap()
+        }.orEmpty()
+        return Imported(favorites, playlists, missing, ruleLists, history, days)
     }
 
     /**
