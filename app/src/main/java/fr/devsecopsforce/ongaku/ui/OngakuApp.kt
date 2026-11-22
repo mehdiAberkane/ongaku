@@ -73,6 +73,8 @@ import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackSort
 import fr.devsecopsforce.ongaku.data.albums
 import fr.devsecopsforce.ongaku.data.artists
+import fr.devsecopsforce.ongaku.data.decades
+import fr.devsecopsforce.ongaku.data.genres
 import fr.devsecopsforce.ongaku.data.missingTrackBackgrounds
 import fr.devsecopsforce.ongaku.data.search
 import fr.devsecopsforce.ongaku.data.sorted
@@ -199,6 +201,13 @@ fun OngakuApp(
     val sortedAlbums = remember(albums, albumSort) { albums.sorted(albumSort) }
     var mergeFeaturing by remember { mutableStateOf(settings.mergeFeaturing) }
     val artists = remember(library.tracks, mergeFeaturing) { library.tracks.artists(mergeFeaturing) }
+    val unknownGenre = stringResource(R.string.library_unknown_genre)
+    val unknownYear = stringResource(R.string.library_unknown_year)
+    val genres = remember(library.tracks, unknownGenre) { library.tracks.genres(unknownGenre) }
+    val decades = remember(library.tracks, unknownYear) {
+        library.tracks.decades({ resources.getString(R.string.library_decade, it) }, unknownYear)
+    }
+    var albumGrid by remember { mutableStateOf(sortStore.albumGrid) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val goBack: () -> Unit = {
         detail = when (val open = detail) {
@@ -237,7 +246,9 @@ fun OngakuApp(
     val deletingPlaylist = deletingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
     // Retrouvé dans la bibliothèque actuelle : la page suit un morceau ajouté ou retiré.
     val groupKey = (currentDetail as? Detail.Group)?.key
-    val openGroup = remember(groupKey, albums, artists) { groupKey?.let { findGroup(it, albums, artists) } }
+    val openGroup = remember(groupKey, albums, artists, genres, decades) {
+        groupKey?.let { findGroup(it, albums, artists, genres, decades) }
+    }
     LaunchedEffect(groupKey, openGroup, library.loaded) {
         // Album ou artiste disparu (morceaux supprimés, filtre) : retour à l'écran précédent.
         if (library.loaded && groupKey != null && openGroup == null) {
@@ -499,6 +510,13 @@ fun OngakuApp(
                         existingIds = existingIds,
                         folders = folderRoot,
                         onOpenFolder = { detail = Detail.Folder(it) },
+                        genres = genres,
+                        decades = decades,
+                        albumGrid = albumGrid,
+                        onAlbumGridChange = {
+                            albumGrid = it
+                            sortStore.albumGrid = it
+                        },
                     )
                 }
             }

@@ -16,6 +16,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
   les écouteurs sont débranchés, reprise de la dernière file au redémarrage.
 - **Minuteur de sommeil** : arrêt après 15, 30, 45 ou 60 minutes, ou à la fin du morceau, réglé
   depuis l'écran de lecture ; le volume baisse sur la dernière minute (désactivable dans les réglages).
+- **Genres et années** : onglets par genre (tag genre, Android 11 et plus) et par décennie ; albums
+  en liste ou en grille de pochettes.
 - **Dossiers** : un onglet qui suit l'arborescence du téléphone ; lecture d'un dossier avec ses
   sous-dossiers, ou de ses seuls fichiers.
 - **Égaliseur** : bandes et préréglages du téléphone, amplification des basses, coupé par défaut ;

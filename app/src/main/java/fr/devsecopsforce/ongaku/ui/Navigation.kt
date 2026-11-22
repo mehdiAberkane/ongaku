@@ -73,6 +73,16 @@ internal val TrackIdsSaver = Saver<List<Long>?, LongArray>(
     restore = { it.toList() },
 )
 
-/** L'album ou l'artiste désigné par [key], tel qu'il est dans la bibliothèque actuelle. */
-internal fun findGroup(key: String, albums: List<TrackGroup>, artists: List<TrackGroup>): TrackGroup? =
-    (if (key.startsWith("artist:")) artists else albums).firstOrNull { it.key == key }
+/** Le groupe désigné par [key] (préfixe « artist: », « genre: », « decade: » ou album), tel qu'il est dans la bibliothèque actuelle. */
+internal fun findGroup(
+    key: String,
+    albums: List<TrackGroup>,
+    artists: List<TrackGroup>,
+    genres: List<TrackGroup> = emptyList(),
+    decades: List<TrackGroup> = emptyList(),
+): TrackGroup? = when {
+    key.startsWith("artist:") -> artists
+    key.startsWith("genre:") -> genres
+    key.startsWith("decade:") -> decades
+    else -> albums
+}.firstOrNull { it.key == key }

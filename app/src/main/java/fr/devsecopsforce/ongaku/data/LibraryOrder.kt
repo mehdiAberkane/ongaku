@@ -120,11 +120,17 @@ class LibrarySortStore(context: Context) {
         get() = enumValueOrDefault(prefs.getString(KEY_ALBUMS, null), AlbumSort.NAME)
         set(value) = prefs.edit { putString(KEY_ALBUMS, value.name) }
 
+    /** Albums en grille de pochettes plutôt qu'en liste. */
+    var albumGrid: Boolean
+        get() = prefs.getBoolean(KEY_ALBUM_GRID, false)
+        set(value) = prefs.edit { putBoolean(KEY_ALBUM_GRID, value) }
+
     private inline fun <reified T : Enum<T>> enumValueOrDefault(name: String?, default: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: default
 
     private companion object {
         const val KEY_TRACKS = "track_sort"
         const val KEY_ALBUMS = "album_sort"
+        const val KEY_ALBUM_GRID = "album_grid"
     }
 }

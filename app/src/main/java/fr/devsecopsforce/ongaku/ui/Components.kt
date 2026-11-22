@@ -132,7 +132,7 @@ internal fun countLabel(ids: Collection<Long>, existingIds: Set<Long>): String {
 /** Sous-titre d'un album (son artiste) ou d'un artiste (son nombre de titres). */
 @Composable
 internal fun groupSubtitle(group: TrackGroup): String =
-    if (group.isArtist) countLabel(group.tracks.size) else group.subtitle
+    if (group.isArtist || group.isCollection) countLabel(group.tracks.size) else group.subtitle
 
 @Composable
 internal fun TrackRow(
