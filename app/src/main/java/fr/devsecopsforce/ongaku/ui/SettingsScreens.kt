@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import fr.devsecopsforce.ongaku.R
+import fr.devsecopsforce.ongaku.data.SmartLists
+import androidx.compose.material3.FilterChip
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.albums
@@ -58,6 +60,8 @@ fun SettingsScreen(
     onExport: (Uri) -> Unit,
     onImport: (Uri) -> Unit,
     onOpenEqualizer: () -> Unit,
+    smartSize: Int,
+    onSmartSizeChange: (Int) -> Unit,
 ) {
     var crossfade by remember { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     var pauseOnNoisy by remember { mutableStateOf(settings.pauseOnNoisy) }
@@ -140,6 +144,19 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
         OutlinedButton(onClick = onOpenEqualizer) { Text(stringResource(R.string.eq_title)) }
         Hint(stringResource(R.string.settings_equalizer_note))
+
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(R.string.settings_smart_size))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmartLists.SIZES.forEach { size ->
+                FilterChip(
+                    selected = size == smartSize,
+                    onClick = { onSmartSizeChange(size) },
+                    label = { Text(size.toString()) },
+                )
+            }
+        }
+        Hint(stringResource(R.string.settings_smart_size_note))
 
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

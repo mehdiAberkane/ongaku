@@ -39,6 +39,11 @@ class PlaybackSettings(context: Context) {
         get() = prefs.getBoolean(KEY_SLEEP_FADE, true)
         set(value) = prefs.edit { putBoolean(KEY_SLEEP_FADE, value) }
 
+    /** Taille des listes automatiques (ajouts récents, plus écoutés…) : voir [SmartLists.SIZES]. */
+    var smartListSize: Int
+        get() = SmartLists.size(prefs.getInt(KEY_SMART_SIZE, SmartLists.DEFAULT_SIZE))
+        set(value) = prefs.edit { putInt(KEY_SMART_SIZE, SmartLists.size(value)) }
+
     var listenedMs: Long
         get() = prefs.getLong(KEY_LISTENED, 0)
         set(value) = prefs.edit { putLong(KEY_LISTENED, value) }
@@ -53,5 +58,6 @@ class PlaybackSettings(context: Context) {
         private const val KEY_BLUETOOTH_DEVICES = "bluetooth_devices"
         private const val KEY_MERGE_FEATURING = "merge_featuring"
         private const val KEY_SLEEP_FADE = "sleep_fade"
+        private const val KEY_SMART_SIZE = "smart_list_size"
     }
 }

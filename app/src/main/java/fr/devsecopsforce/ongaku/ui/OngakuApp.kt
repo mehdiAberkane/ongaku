@@ -69,6 +69,7 @@ import fr.devsecopsforce.ongaku.data.LibrarySortStore
 import fr.devsecopsforce.ongaku.data.PlayCounts
 import fr.devsecopsforce.ongaku.data.PlaybackSettings
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
+import fr.devsecopsforce.ongaku.data.SmartLists
 import fr.devsecopsforce.ongaku.data.Track
 import fr.devsecopsforce.ongaku.data.TrackSort
 import fr.devsecopsforce.ongaku.data.albums
@@ -183,13 +184,20 @@ fun OngakuApp(
     val dataNotice by AppDataStore.pendingNotice.collectAsStateWithLifecycle()
     val playCounts = remember { PlayCounts(context) }
     var counts by remember { mutableStateOf(playCounts.all()) }
+    var lastPlayed by remember { mutableStateOf(playCounts.lastPlayed()) }
     DisposableEffect(playCounts) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
             counts = playCounts.all()
+            lastPlayed = playCounts.lastPlayed()
         }
         playCounts.prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { playCounts.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+        playCounts.lastPlayedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            playCounts.prefs.unregisterOnSharedPreferenceChangeListener(listener)
+            playCounts.lastPlayedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
     }
+    var smartSize by remember { mutableIntStateOf(settings.smartListSize) }
     val sortStore = remember { LibrarySortStore(context) }
     var trackSort by remember { mutableStateOf(sortStore.trackSort) }
     var albumSort by remember { mutableStateOf(sortStore.albumSort) }
@@ -242,6 +250,13 @@ fun OngakuApp(
     val folderTracks = remember(folderPath, library.tracks) {
         folderPath?.let { FolderTree.tracksUnder(library.tracks, it) }.orEmpty()
     }
+    // Liste automatique ouverte : recalculée quand les écoutes, les favoris ou la taille changent.
+    val smartKind = (currentDetail as? Detail.Smart)?.kind
+    val smartTracks = remember(smartKind, library.tracks, counts, lastPlayed, data.favorites, smartSize) {
+        smartKind?.let {
+            SmartLists.build(it, library.tracks, counts, lastPlayed, data.favorites, System.currentTimeMillis(), smartSize)
+        }.orEmpty()
+    }
     val renamingPlaylist = renamingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
     val deletingPlaylist = deletingId?.let { id -> data.playlists.firstOrNull { it.id == id } }
     // Retrouvé dans la bibliothèque actuelle : la page suit un morceau ajouté ou retiré.
@@ -265,8 +280,7 @@ fun OngakuApp(
         is Detail.Group -> openGroup?.title.orEmpty()
         Detail.Search -> stringResource(R.string.main_title_search)
         Detail.Favorites -> stringResource(R.string.main_title_favorites)
-        Detail.RecentlyAdded -> stringResource(R.string.main_title_recent)
-        Detail.Top50 -> stringResource(R.string.main_title_top50)
+        is Detail.Smart -> smartTitle(currentDetail.kind, smartSize)
         is Detail.PlaylistDetail -> currentPlaylist?.name.orEmpty()
         Detail.Settings -> stringResource(R.string.main_title_settings)
         Detail.Stats -> stringResource(R.string.main_title_stats)
@@ -300,6 +314,7 @@ fun OngakuApp(
                         val detailTracks = when (currentDetail) {
                             is Detail.Group -> openGroup?.tracks.orEmpty()
                             Detail.Favorites -> favoriteTracks
+                            is Detail.Smart -> smartTracks
                             is Detail.Folder -> folderTracks
                             is Detail.PlaylistDetail -> playlistTracks
                             else -> emptyList()
@@ -400,29 +415,14 @@ fun OngakuApp(
                             )
                         }
                     }
-                    currentDetail == Detail.RecentlyAdded -> TrackList(
-                        tracks = remember(library.tracks) {
-                            library.tracks.sortedByDescending { it.dateAddedSeconds }
-                                .take(SMART_PLAYLIST_SIZE)
-                        },
+                    currentDetail is Detail.Smart -> SmartListScreen(
+                        kind = currentDetail.kind,
+                        tracks = smartTracks,
+                        counts = counts,
                         currentId = currentId,
                         actions = actions,
                         onPlay = playerViewModel::play,
-                    )
-                    currentDetail == Detail.Top50 -> TrackList(
-                        tracks = remember(counts, tracksById) {
-                            counts.entries.sortedByDescending { it.value }
-                                .mapNotNull { tracksById[it.key] }
-                                .take(SMART_PLAYLIST_SIZE)
-                        },
-                        currentId = currentId,
-                        actions = actions,
-                        onPlay = playerViewModel::play,
-                        emptyMessage = stringResource(R.string.library_top50_empty),
-                        extraLabel = { track ->
-                            val plays = counts[track.id] ?: 0
-                            pluralStringResource(R.plurals.library_play_count, plays, plays)
-                        },
+                        onPlayAll = playerViewModel::playAll,
                     )
                     currentDetail is Detail.PlaylistDetail -> WithMissingBanner(
                         missing = currentPlaylist?.trackIds.orEmpty().count { it !in existingIds },
@@ -458,6 +458,11 @@ fun OngakuApp(
                         onExport = { appData.exportBackup(it, library.allTracks) },
                         onImport = { appData.importBackup(it, library.allTracks) },
                         onOpenEqualizer = { detail = Detail.Equalizer },
+                        smartSize = smartSize,
+                        onSmartSizeChange = {
+                            smartSize = it
+                            settings.smartListSize = it
+                        },
                     )
                     currentDetail == Detail.Stats -> StatsScreen(library.tracks, settings, mergeFeaturing)
                     currentDetail == Detail.Equalizer -> EqualizerScreen()
@@ -503,8 +508,8 @@ fun OngakuApp(
                         onPlayAll = { shuffled -> playerViewModel.playAll(sortedTracks, shuffled) },
                         onOpenGroup = { detail = Detail.Group(it.key) },
                         onOpenFavorites = { detail = Detail.Favorites },
-                        onOpenRecent = { detail = Detail.RecentlyAdded },
-                        onOpenTop = { detail = Detail.Top50 },
+                        smartSize = smartSize,
+                        onOpenSmart = { detail = Detail.Smart(it) },
                         onOpenPlaylist = { detail = Detail.PlaylistDetail(it.id) },
                         onCreatePlaylist = { creatingPlaylist = true },
                         existingIds = existingIds,
@@ -670,4 +675,3 @@ internal fun decodeTarget(value: String?): BackgroundTarget? = when {
     else -> null
 }
 
-internal const val SMART_PLAYLIST_SIZE = 50

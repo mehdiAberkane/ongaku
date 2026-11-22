@@ -54,7 +54,7 @@ object LibraryIdentity {
         val queue = resume.getString(PlaybackStateKeeper.KEY_QUEUE, null).orEmpty()
             .split(',').mapNotNull { it.toLongOrNull() }
         val current = resume.getString(PlaybackStateKeeper.KEY_CURRENT, null)?.toLongOrNull()
-        val referenced = data.referencedIds() + counts.all().keys + queue + listOfNotNull(current)
+        val referenced = data.referencedIds() + counts.referencedIds() + queue + listOfNotNull(current)
 
         val result = TrackIdentity.reconcile(previous, library, referenced)
 
