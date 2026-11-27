@@ -105,7 +105,20 @@ internal data class TrackActions(
     val playNext: (Long) -> Unit,
     val addToQueue: (Long) -> Unit,
     val removeFromPlaylist: ((Long) -> Unit)? = null,
-)
+) {
+    companion object {
+        /** Écran du verrouillage : seul le favori agit, les autres actions n'y sont pas proposées. */
+        fun favoriteOnly(data: AppData, toggleFavorite: (Long) -> Unit) = TrackActions(
+            data = data,
+            toggleFavorite = toggleFavorite,
+            addToPlaylist = {},
+            pickBackground = {},
+            removeBackground = {},
+            playNext = {},
+            addToQueue = {},
+        )
+    }
+}
 
 @Composable
 fun OngakuApp(

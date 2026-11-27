@@ -90,7 +90,10 @@ import fr.devsecopsforce.ongaku.playback.QueueOrder
 import java.io.File
 import kotlin.math.roundToInt
 
-/** Version réduite de l'écran de lecture : uniquement les commandes, sans accès à la bibliothèque. */
+/**
+ * Version réduite de l'écran de lecture : les commandes et le favori, sans accès à la bibliothèque
+ * (ni file, ni listes, ni images). Le favori passe par le même stockage que l'écran principal.
+ */
 @Composable
 fun LockScreenPlayer(
     playerViewModel: PlayerViewModel,
@@ -100,12 +103,13 @@ fun LockScreenPlayer(
     val player by playerViewModel.state.collectAsStateWithLifecycle()
     val data by appData.state.collectAsStateWithLifecycle()
     val trackId = player.current?.mediaId?.toLongOrNull()
+    val actions = remember(data) { TrackActions.favoriteOnly(data, appData::toggleFavorite) }
     ArtworkAccentEffect(player.current?.mediaMetadata?.artworkUri)
     FullPlayer(
         player = player,
         viewModel = playerViewModel,
         trackId = trackId,
-        actions = null,
+        actions = actions,
         background = appData.backgroundFile(playerBackgroundName(data, trackId)),
         onClose = onUnlock,
         onLockScreen = true,
@@ -214,11 +218,14 @@ internal fun FullPlayer(
                     SleepTimerButton(viewModel)
                     if (trackId != null && actions != null) {
                         FavoriteButton(trackId, actions)
-                        IconButton(onClick = { queueOpen = true }) {
-                            Icon(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue))
+                        // Par-dessus le verrouillage : le favori seulement, rien qui ouvre la file ou les listes.
+                        if (!onLockScreen) {
+                            IconButton(onClick = { queueOpen = true }) {
+                                Icon(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue))
+                            }
+                            // Le morceau en cours : « Lire ensuite » n'aurait pas de sens.
+                            TrackMenuButton(trackId, actions, queueEntries = false)
                         }
-                        // Le morceau en cours : « Lire ensuite » n'aurait pas de sens.
-                        TrackMenuButton(trackId, actions, queueEntries = false)
                     }
                 }
                 // Pochette au centre de l'espace libre ; rien quand le morceau n'en a pas.
