@@ -30,6 +30,7 @@ import fr.devsecopsforce.ongaku.data.PlaylistBackup
 import fr.devsecopsforce.ongaku.data.PlaylistEdits
 import fr.devsecopsforce.ongaku.data.RuleList
 import fr.devsecopsforce.ongaku.data.SafeFile
+import fr.devsecopsforce.ongaku.data.SelectionRules
 import fr.devsecopsforce.ongaku.data.backgroundNames
 import fr.devsecopsforce.ongaku.data.missingTrackBackgrounds
 import fr.devsecopsforce.ongaku.data.orphanBackgroundFiles
@@ -140,6 +141,11 @@ class AppDataRepository private constructor(private val app: Application) {
 
     private suspend fun toast(@StringRes message: Int, vararg args: Any) = withContext(Dispatchers.Main) {
         Toast.makeText(app, app.getString(message, *args), Toast.LENGTH_SHORT).show()
+    }
+
+    /** Cœur de la barre de sélection : voir [SelectionRules.favoritesAfter]. */
+    fun toggleFavorites(selected: List<Long>) = mutate { data ->
+        data.copy(favorites = SelectionRules.favoritesAfter(data.favorites, selected))
     }
 
     fun toggleFavorite(trackId: Long) = mutate { data ->

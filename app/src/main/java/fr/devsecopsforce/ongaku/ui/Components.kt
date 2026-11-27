@@ -60,6 +60,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import fr.devsecopsforce.ongaku.R
 import fr.devsecopsforce.ongaku.data.CoverShape
 import fr.devsecopsforce.ongaku.data.Track
@@ -134,6 +139,21 @@ internal fun countLabel(ids: Collection<Long>, existingIds: Set<Long>): String {
 internal fun groupSubtitle(group: TrackGroup): String =
     if (group.isArtist || group.isCollection) countLabel(group.tracks.size) else group.subtitle
 
+/**
+ * Sélection de plusieurs morceaux, partagée par toutes les listes de l'écran principal. [selected]
+ * dans l'ordre des choix ; vide hors du mode sélection. Absente (null) là où la sélection n'a pas
+ * de sens, comme l'écran du verrouillage.
+ */
+internal class TrackSelection(val selected: List<Long>, val onToggle: (Long) -> Unit) {
+    val active: Boolean get() = selected.isNotEmpty()
+}
+
+internal val LocalTrackSelection = compositionLocalOf<TrackSelection?> { null }
+
+/**
+ * Un morceau. Un appui long commence la sélection ; en mode sélection, un toucher ajoute ou retire
+ * le morceau au lieu de le lire.
+ */
 @Composable
 internal fun TrackRow(
     track: Track,
@@ -142,16 +162,35 @@ internal fun TrackRow(
     extraLabel: String? = null,
     onClick: () -> Unit,
 ) {
+    val selection = LocalTrackSelection.current
+    val selecting = selection?.active == true
+    val selected = selection != null && track.id in selection.selected
+    val haptics = LocalHapticFeedback.current
     ListRow(
         title = track.title,
         subtitle = listOfNotNull(track.artist, formatTime(track.durationMs), extraLabel)
             .joinToString(" · "),
-        artworkUri = track.artworkUri,
+        artworkUri = if (selected) null else track.artworkUri,
         highlighted = highlighted,
-        onClick = onClick,
+        icon = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.MusicNote,
+        selected = selected,
+        onClick = if (selecting) {
+            { if (selection != null) selection.onToggle(track.id) }
+        } else {
+            onClick
+        },
+        onLongClick = selection?.let { current ->
+            {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                current.onToggle(track.id)
+            }
+        },
         trailing = {
-            FavoriteButton(track.id, actions)
-            TrackMenuButton(track.id, actions)
+            // En mode sélection, les actions portent sur toute la sélection (barre du haut).
+            if (!selecting) {
+                FavoriteButton(track.id, actions)
+                TrackMenuButton(track.id, actions)
+            }
         },
     )
 }
@@ -255,6 +294,9 @@ internal fun ListRow(
     artworkUri: Uri?,
     highlighted: Boolean = false,
     icon: ImageVector = Icons.Rounded.MusicNote,
+    /** Ligne choisie dans une sélection : fond teinté. */
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
     trailing: @Composable () -> Unit = {},
 ) {
@@ -263,7 +305,8 @@ internal fun ListRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 16.dp, top = verticalPadding, bottom = verticalPadding, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

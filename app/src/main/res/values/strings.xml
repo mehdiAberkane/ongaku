@@ -456,4 +456,14 @@
     <string name="auto_backup_now">Sauvegarder maintenant</string>
     <string name="auto_backup_done">Sauvegarde enregistrée dans le dossier.</string>
     <string name="auto_backup_failed">Sauvegarde impossible dans ce dossier.</string>
+    <!-- Sélection multiple -->
+    <plurals name="selection_count">
+        <item quantity="one">%1$d sélectionné</item>
+        <item quantity="many">%1$d sélectionnés</item>
+        <item quantity="other">%1$d sélectionnés</item>
+    </plurals>
+    <string name="selection_close">Fermer la sélection</string>
+    <string name="selection_play">Lire la sélection</string>
+    <string name="selection_favorite_add">Mettre en favoris</string>
+    <string name="selection_favorite_remove">Retirer des favoris</string>
 </resources>
