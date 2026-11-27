@@ -12,6 +12,8 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
   accents ni des majuscules ; tri des titres (titre, artiste, album, date d'ajout, durée, écoutes)
   et des albums (nom, artiste, année), retenu d'un lancement à l'autre ; index par lettre pour
   parcourir vite les longues listes.
+- **Sélection multiple** : appui long sur un morceau, puis lire la sélection, la mettre en favoris,
+  l'ajouter à la file ou à une liste.
 - **Lecture** : file d'attente, lecture aléatoire, répétition, fondu enchaîné réglable, pause quand
   les écouteurs sont débranchés, reprise de la dernière file au redémarrage.
 - **Minuteur de sommeil** : arrêt après 15, 30, 45 ou 60 minutes, ou à la fin du morceau, réglé
