@@ -466,4 +466,12 @@
     <string name="selection_play">Lire la sélection</string>
     <string name="selection_favorite_add">Mettre en favoris</string>
     <string name="selection_favorite_remove">Retirer des favoris</string>
+    <!-- Paroles -->
+    <string name="player_lyrics">Afficher les paroles</string>
+    <string name="player_lyrics_hide">Afficher la pochette</string>
+    <string name="lyrics_none">Pas de paroles pour ce morceau.\n\nOngaku lit les paroles enregistrées dans le fichier, et un fichier .lrc du même nom posé à côté si tu choisis ton dossier de musique dans les réglages.</string>
+    <string name="settings_lyrics">Paroles</string>
+    <string name="settings_lyrics_note">Les paroles enregistrées dans les fichiers s\'affichent toujours. Pour les fichiers .lrc posés à côté des morceaux, Android demande de choisir le dossier de musique (lecture seule, rien n\'est modifié). Aucune recherche sur Internet.</string>
+    <string name="settings_lyrics_choose">Choisir le dossier de musique</string>
+    <string name="settings_lyrics_forget">Ne plus lire les fichiers .lrc</string>
 </resources>
