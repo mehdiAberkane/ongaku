@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -178,6 +179,8 @@ internal fun FullPlayer(
 ) {
     val metadata = player.current?.mediaMetadata
     var queueOpen by rememberSaveable { mutableStateOf(false) }
+    // Paroles à la place de la pochette ; gardé à la rotation et d'un morceau à l'autre.
+    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize()) {
@@ -216,6 +219,13 @@ internal fun FullPlayer(
                     }
                     Spacer(Modifier.weight(1f))
                     SleepTimerButton(viewModel)
+                    IconButton(onClick = { lyricsOpen = !lyricsOpen }) {
+                        Icon(
+                            Icons.Rounded.Lyrics,
+                            stringResource(if (lyricsOpen) R.string.player_lyrics_hide else R.string.player_lyrics),
+                            tint = if (lyricsOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (trackId != null && actions != null) {
                         FavoriteButton(trackId, actions)
                         // Par-dessus le verrouillage : le favori seulement, rien qui ouvre la file ou les listes.
@@ -233,7 +243,7 @@ internal fun FullPlayer(
                     Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    PlayerCover(metadata?.artworkUri)
+                    if (lyricsOpen) LyricsPanel(trackId, viewModel) else PlayerCover(metadata?.artworkUri)
                 }
                 Text(
                     metadata?.title?.toString().orEmpty(),

@@ -147,6 +147,9 @@ fun SettingsScreen(
         Hint(stringResource(R.string.settings_equalizer_note))
 
         Spacer(Modifier.height(16.dp))
+        LyricsSection()
+
+        Spacer(Modifier.height(16.dp))
         Text(stringResource(R.string.settings_smart_size))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmartLists.SIZES.forEach { size ->

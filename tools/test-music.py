@@ -32,6 +32,14 @@ TRACKS = [
     ("Divers", "Sans tags.flac", None, None, None, None, 0, None, 0, 0),
 ]
 
+# Paroles : synchronisées dans les tags d'un morceau, et dans un fichier .lrc posé à côté d'un autre.
+TAG_LYRICS = {
+    "03 Matin.flac": "[00:02.00]Le matin se lève\n[00:08.00]Sur la ville encore endormie\n[00:15.00]Une note, puis une autre\n[00:25.00]Et le jour commence",
+}
+LRC_FILES = {
+    ("Rock", "02 Midi.lrc"): "[ti:Midi]\n[ar:Les Essais]\n[00:01.00]Il est midi\n[00:06.00]Le soleil au plus haut\n[00:12.00]Pas une ombre\n[00:20.00]Juste la note qui tient",
+}
+
 SECONDS = 40          # assez pour qu'une écoute compte (30 s) et pour tester le fondu enchaîné
 RATE = 22050          # largement assez pour une note ; fichiers deux fois plus petits
 BLOCK = 4096          # échantillons par trame FLAC
@@ -137,10 +145,17 @@ def main():
             ("GENRE", genre),
             ("TRACKNUMBER", track or None),
             ("DISCNUMBER", disc or None),
+            ("LYRICS", TAG_LYRICS.get(name)),
         ]
         target = os.path.join(directory, name)
         # Une note différente par morceau, pour les reconnaître à l'oreille.
         write_flac(target, 220 * 2 ** (index / 12), tags)
+        print(target)
+
+    for (folder, name), text in LRC_FILES.items():
+        target = os.path.join(args.output, folder, name)
+        with open(target, "w", encoding="utf-8") as out:
+            out.write(text + "\n")
         print(target)
 
 

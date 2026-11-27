@@ -34,6 +34,9 @@ publicité, et pas d'accès à Internet : l'application ne demande pas cette per
   sous-dossiers, ou de ses seuls fichiers.
 - **Égaliseur** : bandes et préréglages du téléphone, amplification des basses, coupé par défaut ;
   accès à l'égaliseur du téléphone quand il en propose un. Les fichiers ne sont jamais modifiés.
+- **Paroles hors ligne** : celles des tags (MP3, FLAC) ou d'un fichier `.lrc` posé à côté du
+  morceau, dans un dossier choisi en lecture seule dans les réglages. Les paroles synchronisées
+  suivent la lecture ; toucher une ligne y fait sauter.
 - **Lecture automatique en Bluetooth** : la musique reprend quand un appareil choisi se connecte.
 - **Écran de verrouillage** : écran de lecture affiché par-dessus le verrouillage, sans accès à la
   bibliothèque ni aux réglages. Son bouton « Déverrouiller » ouvre le déverrouillage d'Android
